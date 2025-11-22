@@ -1,19 +1,23 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Shader Alchemist 
 
-# Run and deploy your AI Studio app
+![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![Tech](https://img.shields.io/badge/tech-Three.js%20%7C%20React%20%7C%20GLSL-green)
 
-This contains everything you need to run your app locally.
+**Shader Alchemist** 是一款第一人称解谜游戏。在这个由极简几何体构成的实验室中，玩家不再是破坏者，而是物质的“炼金术师”。通过手中的 Shader 枪，你可以改变物体的材质属性，从而改变物理规则，跨越障碍，抵达终点。
 
-View your app in AI Studio: https://ai.studio/apps/drive/1TRXRQHdCqIQlU6Kuk0DjyOOzSSeyzmSm
+---
 
-## Run Locally
+## 🎮 核心玩法 (Gameplay)
 
-**Prerequisites:**  Node.js
+### 游戏目标
+每一关的目标是从起点移动到终点的光圈。途中会有高墙、深渊、激光等障碍阻挡。
 
+### 操作方式
+- **WASD**: 移动角色
+- **鼠标**: 控制视角
+- **鼠标左键**: 射击/转化物体
+- **数字键 1 / 2 / 3**: 切换 Shader 枪模式
 
-<<<<<<< HEAD
 ---
 
 ## 🔫 三大元素枪 (The Shader Guns)
@@ -57,7 +61,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1TRXRQHdCqIQlU6Kuk0DjyO
 
 ### 基础架构
 - [x] **基础漫游**: 实现 WASD 移动和鼠标视角控制 (First Person Controls)。
-- [x] **枪械加载**:实现了三种枪的初级形态
+- [x] **枪械外观**: 实现第一人称枪械外观.
 - [ ] **场景加载**: 搭建基础关卡几何体 (Cube, Wall, Sphere)。
 - [ ] **天空盒 (Skybox)**: 实现环境背景，为镜面反射提供素材。
 
@@ -93,10 +97,3 @@ View your app in AI Studio: https://ai.studio/apps/drive/1TRXRQHdCqIQlU6Kuk0DjyO
     npm run dev
     ```
 3.  打开浏览器访问 `http://localhost:3000
-=======
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
->>>>>>> 2e6f503c293dd7b297be7ad21abf2ff392ec88e9
