@@ -60,7 +60,7 @@
 ## 🛠️ 开发计划 (To-Do List)
 
 ### 基础架构
-- [x]**基础漫游**: 实现 WASD 移动和鼠标视角控制 (First Person Controls)。
+- [x] **基础漫游**: 实现 WASD 移动和鼠标视角控制 (First Person Controls)。
 - [x] **枪械加载**:实现了三种枪的初级形态
 - [ ] **场景加载**: 搭建基础关卡几何体 (Cube, Wall, Sphere)。
 - [ ] **天空盒 (Skybox)**: 实现环境背景，为镜面反射提供素材。
