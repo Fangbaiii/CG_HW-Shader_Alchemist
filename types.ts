@@ -35,3 +35,25 @@ export const GUN_CONFIGS: Record<GunType, GunConfig> = {
     description: "Transforms surfaces into perfect reflectors."
   }
 };
+
+// Fix for missing JSX Intrinsic Elements in the test environment
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      mesh: any;
+      group: any;
+      boxGeometry: any;
+      cylinderGeometry: any;
+      planeGeometry: any;
+      torusGeometry: any;
+      tubeGeometry: any;
+      meshStandardMaterial: any;
+      meshPhysicalMaterial: any;
+      meshBasicMaterial: any;
+      ambientLight: any;
+      pointLight: any;
+      color: any;
+      fog: any;
+    }
+  }
+}
