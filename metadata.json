@@ -1,0 +1,5 @@
+{
+  "name": "Shader Alchemist Lab",
+  "description": "A first-person puzzle prototype featuring three unique shader-based guns: Jelly, Ghost, and Mirror. Explore the lab and transmutate matter.",
+  "requestFramePermissions": []
+}
