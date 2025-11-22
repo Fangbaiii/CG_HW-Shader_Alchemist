@@ -1,23 +1,19 @@
-# Shader Alchemist 
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
-![Tech](https://img.shields.io/badge/tech-Three.js%20%7C%20React%20%7C%20GLSL-green)
+# Run and deploy your AI Studio app
 
-**Shader Alchemist** 是一款第一人称解谜游戏。在这个由极简几何体构成的实验室中，玩家不再是破坏者，而是物质的“炼金术师”。通过手中的 Shader 枪，你可以改变物体的材质属性，从而改变物理规则，跨越障碍，抵达终点。
+This contains everything you need to run your app locally.
 
----
+View your app in AI Studio: https://ai.studio/apps/drive/1TRXRQHdCqIQlU6Kuk0DjyOOzSSeyzmSm
 
-## 🎮 核心玩法 (Gameplay)
+## Run Locally
 
-### 游戏目标
-每一关的目标是从起点移动到终点的光圈。途中会有高墙、深渊、激光等障碍阻挡。
+**Prerequisites:**  Node.js
 
-### 操作方式
-- **WASD**: 移动角色
-- **鼠标**: 控制视角
-- **鼠标左键**: 射击/转化物体
-- **数字键 1 / 2 / 3**: 切换 Shader 枪模式
 
+<<<<<<< HEAD
 ---
 
 ## 🔫 三大元素枪 (The Shader Guns)
@@ -97,3 +93,10 @@
     npm run dev
     ```
 3.  打开浏览器访问 `http://localhost:3000
+=======
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
+>>>>>>> 2e6f503c293dd7b297be7ad21abf2ff392ec88e9
