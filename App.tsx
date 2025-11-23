@@ -1,13 +1,35 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Stats, Loader } from '@react-three/drei';
+import * as THREE from 'three';
 import { Player } from './components/Player';
 import { World } from './components/World';
 import { GunType, GUN_CONFIGS } from './types';
+import { JellyBullet } from './components/JellyBullet';
+import { GhostBullet } from './components/GhostBullet';
+import { MirrorBullet } from './components/MirrorBullet';
+
+interface Bullet {
+  id: number;
+  type: GunType;
+  origin: THREE.Vector3;
+  direction: THREE.Vector3;
+}
 
 export default function App() {
   const [currentGun, setCurrentGun] = useState<GunType>(GunType.JELLY);
   const [isInfoExpanded, setIsInfoExpanded] = useState(true);
+  const [bullets, setBullets] = useState<Bullet[]>([]);
+
+  const handleShoot = (origin: THREE.Vector3, direction: THREE.Vector3) => {
+      // All guns now use projectiles
+      const id = Date.now() + Math.random();
+      setBullets(prev => [...prev, { id, type: currentGun, origin, direction }]);
+  };
+
+  const removeBullet = (id: number) => {
+      setBullets(prev => prev.filter(b => b.id !== id));
+  };
 
   // Keyboard controls for weapon switching
   useEffect(() => {
@@ -28,7 +50,38 @@ export default function App() {
            <color attach="background" args={['#111']} />
            <fog attach="fog" args={['#111', 5, 30]} />
            <World />
-           <Player currentGun={currentGun} onShoot={() => { /* optional sound trigger */ }} />
+           <Player currentGun={currentGun} onShoot={handleShoot} />
+           {bullets.map(b => {
+              if (b.type === GunType.JELLY) {
+                return (
+                  <JellyBullet 
+                      key={b.id} 
+                      position={b.origin} 
+                      direction={b.direction} 
+                      onHit={() => removeBullet(b.id)} 
+                  />
+                );
+              } else if (b.type === GunType.GHOST) {
+                return (
+                  <GhostBullet 
+                      key={b.id} 
+                      position={b.origin} 
+                      direction={b.direction} 
+                      onHit={() => removeBullet(b.id)} 
+                  />
+                );
+              } else if (b.type === GunType.MIRROR) {
+                return (
+                  <MirrorBullet 
+                      key={b.id} 
+                      position={b.origin} 
+                      direction={b.direction} 
+                      onHit={() => removeBullet(b.id)} 
+                  />
+                );
+              }
+              return null;
+           })}
         </Suspense>
       </Canvas>
 

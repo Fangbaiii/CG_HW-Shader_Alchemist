@@ -13,7 +13,7 @@ const OBJECT_SIZE = 1.5;
 
 interface PlayerProps {
   currentGun: GunType;
-  onShoot: () => void;
+  onShoot: (origin: THREE.Vector3, direction: THREE.Vector3) => void;
 }
 
 export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot }) => {
@@ -105,18 +105,22 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot }) => {
   }, [isLocked, currentGun]); 
 
   const handleShoot = () => {
-      onShoot();
-      // Raycast from center of screen (using the main world camera)
-      raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
-      const intersects = raycaster.current.intersectObjects(scene.children, true);
+      // Calculate origin and direction
+      // Origin: slightly in front of the camera to avoid clipping with player collider if any
+      const origin = camera.position.clone();
+      const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+      
+      // Adjust origin to be slightly lower and to the right to match gun position visually (optional, but looks better)
+      // For now, center screen is fine for aiming accuracy.
+      
+      onShoot(origin, direction);
 
-      for (let i = 0; i < intersects.length; i++) {
-          const object = intersects[i].object;
-          if (object.userData && object.userData.isInteractive && object.userData.hitHandler) {
-              object.userData.hitHandler(currentGun);
-              break;
-          }
+      // All guns now use projectiles, so we remove the legacy hitscan logic entirely
+      /* 
+      if (currentGun !== GunType.JELLY && currentGun !== GunType.GHOST) {
+        // ... legacy hitscan code ...
       }
+      */
   };
 
   const checkCollision = (newPos: THREE.Vector3) => {
