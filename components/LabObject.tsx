@@ -75,7 +75,8 @@ export const LabObject: React.FC<LabObjectProps> = ({ position, initialType = nu
     <group position={position}>
       {type === GunType.MIRROR ? (
          // If it is a mirror, wrap in CubeCamera to generate real-time reflection texture
-         <CubeCamera resolution={128} frames={Infinity}>
+         // Optimization: Reduced resolution to 64 to improve performance
+         <CubeCamera resolution={64} frames={Infinity}>
             {(texture) => (
                 <LabObjectMesh type={type} hitHandler={hit} envMap={texture} />
             )}

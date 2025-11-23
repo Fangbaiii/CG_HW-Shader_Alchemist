@@ -4,9 +4,10 @@ import { PointerLockControls, Hud, PerspectiveCamera, Environment } from '@react
 import * as THREE from 'three';
 import { GunModel } from './GunModel';
 import { GunType } from '../types';
+import { Crosshair } from './Crosshair';
 
-const SPEED = 5.0;
-const JUMP_FORCE = 6.0;
+const SPEED = 3.5;
+const JUMP_FORCE = 9.0;
 const GRAVITY = 18.0;
 const PLAYER_RADIUS = 0.3;
 const OBJECT_SIZE = 1.5; 
@@ -28,9 +29,18 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot }) => {
   const velocity = useRef(new THREE.Vector3());
   const direction = useRef(new THREE.Vector3());
   const [isShooting, setIsShooting] = useState(false);
+  const [isHovering, setIsHovering] = useState(false); // New state for hovering
 
   // Raycaster for shooting
   const raycaster = useRef(new THREE.Raycaster());
+  
+  // Physics / Jelly Logic Refs
+  const downRaycaster = useRef(new THREE.Raycaster());
+  const isOnJelly = useRef(false);
+  const jellyNormal = useRef(new THREE.Vector3(0, 1, 0));
+
+  // Frame counter ref
+  const frameCounter = useRef(0);
 
   useEffect(() => {
     const onKeyDown = (event: any) => {
@@ -53,7 +63,12 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot }) => {
           break;
         case 'Space':
           if (canJump.current) {
-            velocity.current.y = JUMP_FORCE;
+            if (isOnJelly.current) {
+                // Super Jump on Jelly
+                velocity.current.y = JUMP_FORCE * 2.5;
+            } else {
+                velocity.current.y = JUMP_FORCE;
+            }
             canJump.current = false;
           }
           break;
@@ -170,6 +185,50 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot }) => {
 
     // --- PHYSICS / MOVEMENT ---
     
+    // 1. Jelly Detection (Raycasting)
+    downRaycaster.current.set(camera.position, new THREE.Vector3(0, -1, 0));
+    downRaycaster.current.far = 2.0; // Eye height (1.7) + tolerance
+    
+    const intersects = downRaycaster.current.intersectObjects(scene.children, true);
+    isOnJelly.current = false;
+    jellyNormal.current.set(0, 1, 0);
+
+    for (const hit of intersects) {
+        if (hit.object.userData.isInteractive) {
+            if (hit.object.userData.type === GunType.JELLY) {
+                isOnJelly.current = true;
+                if (hit.face) {
+                    jellyNormal.current.copy(hit.face.normal!);
+                    // Transform normal to world space to handle rotation
+                    // We use transformDirection which applies rotation of the object
+                    jellyNormal.current.transformDirection(hit.object.matrixWorld);
+                }
+            }
+            break; // Found the ground
+        }
+    }
+
+    // 2. Aim Detection (Crosshair)
+    // Optimization: Run raycast only every 4 frames to save performance
+    frameCounter.current += 1;
+    if (frameCounter.current % 4 === 0) {
+        // We reuse the main raycaster for this, but we need to set it from camera
+        raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
+        // Limit distance for interaction feedback if desired, or infinite
+        raycaster.current.far = 100; 
+        const aimIntersects = raycaster.current.intersectObjects(scene.children, true);
+        let foundInteractive = false;
+        for (const hit of aimIntersects) {
+            if (hit.object.userData.isInteractive) {
+                foundInteractive = true;
+                break;
+            }
+        }
+        if (foundInteractive !== isHovering) {
+            setIsHovering(foundInteractive);
+        }
+    }
+
     velocity.current.y -= GRAVITY * delta;
     camera.position.y += velocity.current.y * delta;
     
@@ -180,13 +239,24 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot }) => {
     } else {
        if (checkCollision(camera.position)) {
            if (velocity.current.y > 0) {
+               // Hit head
+               camera.position.y -= velocity.current.y * delta; // Undo move
                velocity.current.y = 0;
-               camera.position.y -= velocity.current.y * delta; 
            } 
            else if (velocity.current.y < 0) {
-                velocity.current.y = 0;
-                canJump.current = true;
-                camera.position.y -= velocity.current.y * delta; 
+                // Landing
+                const oldVelocityY = velocity.current.y;
+                camera.position.y -= oldVelocityY * delta; // Undo move
+                
+                if (isOnJelly.current && oldVelocityY < -2.0) {
+                    // Trampoline Effect
+                    // Bounce direction: Normal * Speed * Damping
+                    const speed = -oldVelocityY * 0.9;
+                    velocity.current.copy(jellyNormal.current).multiplyScalar(speed);
+                } else {
+                    velocity.current.y = 0;
+                    canJump.current = true;
+                }
            }
        }
     }
@@ -223,6 +293,9 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot }) => {
         camera.position.sub(moveZ); 
         velocity.current.z = 0;
     }
+
+    // Increment frame counter
+    frameCounter.current++;
   }); 
 
   return (
@@ -246,6 +319,9 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot }) => {
           
           {/* The Gun */}
           <GunModel currentGun={currentGun} isShooting={isShooting} />
+          
+          {/* The Crosshair */}
+          <Crosshair currentGun={currentGun} isShooting={isShooting} isHovering={isHovering} />
       </Hud>
     </>
   );

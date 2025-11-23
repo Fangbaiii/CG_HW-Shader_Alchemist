@@ -158,11 +158,11 @@ export default function App() {
       </div>
 
       {/* Click to Start Overlay */}
-      <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none">
+      {/* <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none">
           <div className="text-white/20 font-mono text-xs animate-pulse tracking-widest">
               CLICK TO ENGAGE NEURAL LINK
           </div>
-      </div>
+      </div> */}
 
       {/* Vignette */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none bg-[radial-gradient(circle_at_center,transparent_40%,rgba(0,0,0,0.8)_100%)]"></div>
