@@ -5,8 +5,9 @@ import { LabObject } from './LabObject';
 export const World: React.FC = () => {
   return (
     <>
+      {/* <Environment preset="city" />  Commented out to prevent loading issues if network is poor */}
+
       <Environment preset="city" />
-      
       {/* Ambient light for base visibility */}
       <ambientLight intensity={0.4} />
       {/* Main Light */}

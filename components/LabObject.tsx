@@ -32,6 +32,12 @@ const LabObjectMesh = ({
         } 
     });
 
+    // Adjust geometry segments based on type
+    // Jelly needs high tessellation for vertex displacement (32x32x32)
+    // Ghost needs low tessellation (1x1x1) so wireframe isn't too dense
+    // Others can use standard low tessellation
+    const segments = type === GunType.JELLY ? 32 : 1;
+
     return (
       <mesh 
         ref={meshRef} 
@@ -40,7 +46,7 @@ const LabObjectMesh = ({
         castShadow 
         receiveShadow
       >
-        <boxGeometry args={[1.5, 1.5, 1.5]} />
+        <boxGeometry args={[1.5, 1.5, 1.5, segments, segments, segments]} />
         
         {type === null && <LabMaterial />}
         {type === GunType.JELLY && <JellyMaterial color="#39FF14" />}

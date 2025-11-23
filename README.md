@@ -66,8 +66,8 @@
 - [ ] **天空盒 (Skybox)**: 实现环境背景，为镜面反射提供素材。
 
 ### 核心交互
-- [ ] **射线检测 (Raycasting)**: 实现点击鼠标时判断射中物体的逻辑。
-- [ ] **状态管理**: 为物体添加 `type` 标记 (0=普通, 1=果冻, 2=幽灵, 3=镜面)。
+- [x] **射线检测 (Raycasting)**: 实现点击鼠标时判断射中物体的逻辑。
+- [x] **状态管理**: 为物体添加 `type` 标记 (0=普通, 1=果冻, 2=幽灵, 3=镜面)。
 - [ ] **简单物理**:
     - [ ] 果冻模式：给予玩家垂直向上的速度。
     - [ ] 幽灵模式：动态开启/关闭碰撞体。
@@ -75,14 +75,14 @@
 ### 图形与 Shader
 - [ ] **Uniform 传递**: 将 JS 中的 `time` 等变量传入 Shader。
 - [ ] **光照系统**: 实现基础 Phong 光照。
-- [ ] **Shader 编写**:
-    - [ ] Jelly Shader (Vertex Displacement)
-    - [ ] Wireframe/Ghost Shader (Discard/Alpha)
-    - [ ] Mirror Shader (CubeMap Reflection)
+- [x] **Shader 编写**:
+    - [x] Jelly Shader (Vertex Displacement)
+    - [x] Wireframe/Ghost Shader (Discard/Alpha)
+    - [x] Mirror Shader (CubeMap Reflection)
 
 ### 视觉特效 (Bonus)
 - [ ] **UI**: 屏幕准星。
-- [ ] **粒子特效**: 开枪时的枪口火焰或击中反馈。
+- [x] **粒子特效**: 开枪时的枪口火焰或击中反馈。
 
 ---
 
