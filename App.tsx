@@ -9,23 +9,35 @@ import { JellyBullet } from './components/JellyBullet';
 import { GhostBullet } from './components/GhostBullet';
 import { MirrorBullet } from './components/MirrorBullet';
 
-const STAGE_INFO = [
+const STAGES = [
   {
     code: '01',
     title: 'Molten Hopscotch',
     detail: 'Transmutate floating ruins into jelly trampolines and cross the magma void.',
+    spawn: new THREE.Vector3(0, 1.7, 8),
+    goalZ: -44,
   },
   {
     code: '02',
     title: 'Phase Crucible',
     detail: 'Ghost the gate bricks to slip through sealed corridors and vertical shafts.',
+    spawn: new THREE.Vector3(0, 1.8, 2),
+    goalZ: -44,
   },
   {
     code: '03',
     title: 'Mirror Spire',
     detail: 'Chrome the launch pads to harvest forward boosts and climb the prism tower.',
+    spawn: new THREE.Vector3(0, 1.9, 4),
+    goalZ: -46,
   },
-];
+] as const;
+
+type StageTransition = {
+  type: 'stage' | 'final';
+  from: number;
+  to: number;
+};
 
 interface Bullet {
   id: number;
@@ -40,6 +52,11 @@ export default function App() {
   const [bullets, setBullets] = useState<Bullet[]>([]);
   const [deathCount, setDeathCount] = useState(0);
   const [deathBanner, setDeathBanner] = useState<'lava' | 'void' | null>(null);
+  const [stageIndex, setStageIndex] = useState(0);
+  const [transitionInfo, setTransitionInfo] = useState<StageTransition | null>(null);
+  const [resetToken, setResetToken] = useState(0);
+
+  const currentStage = STAGES[stageIndex];
 
   const handleShoot = (origin: THREE.Vector3, direction: THREE.Vector3) => {
       // All guns now use projectiles
@@ -54,6 +71,7 @@ export default function App() {
   const handleDeath = (reason: 'lava' | 'void') => {
     setDeathCount(prev => prev + 1);
     setDeathBanner(reason);
+    setResetToken(token => token + 1);
   };
 
   useEffect(() => {
@@ -61,6 +79,20 @@ export default function App() {
     const timeout = setTimeout(() => setDeathBanner(null), 1500);
     return () => clearTimeout(timeout);
   }, [deathBanner]);
+
+  const handleStageComplete = () => {
+    const from = stageIndex;
+    const to = (stageIndex + 1) % STAGES.length;
+    const isFinal = from === STAGES.length - 1;
+    setTransitionInfo({ type: isFinal ? 'final' : 'stage', from, to });
+    setResetToken(token => token + 1);
+
+    const duration = isFinal ? 2800 : 1600;
+    setTimeout(() => {
+      setTransitionInfo(null);
+      setStageIndex(to);
+    }, duration);
+  };
 
   // Keyboard controls for weapon switching
   useEffect(() => {
@@ -80,8 +112,17 @@ export default function App() {
         <Suspense fallback={null}>
            <color attach="background" args={['#111']} />
            <fog attach="fog" args={['#111', 5, 30]} />
-           <World />
-           <Player currentGun={currentGun} onShoot={handleShoot} onDeath={handleDeath} />
+           <World resetToken={resetToken} stageIndex={stageIndex} />
+           <Player
+             currentGun={currentGun}
+             onShoot={handleShoot}
+             onDeath={handleDeath}
+             onStageComplete={handleStageComplete}
+             spawnPoint={currentStage.spawn}
+             goalZ={currentStage.goalZ}
+             stageId={stageIndex}
+             isFrozen={Boolean(transitionInfo)}
+           />
            {bullets.map(b => {
               if (b.type === GunType.JELLY) {
                 return (
@@ -195,10 +236,13 @@ export default function App() {
         <div className="bg-black/55 backdrop-blur-sm border border-white/10 rounded-lg p-4">
           <div className="text-[11px] tracking-[0.3em] text-gray-400 font-mono mb-3">LEVEL BRIEFING</div>
           <div className="space-y-3">
-            {STAGE_INFO.map(stage => (
-              <div key={stage.code} className="border-l-2 border-white/15 pl-3">
+            {STAGES.map((stage, index) => (
+              <div
+                key={stage.code}
+                className={`border-l-2 pl-3 transition-colors ${index === stageIndex ? 'border-cyan-400' : 'border-white/15'}`}
+              >
                 <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-cyan-300">{stage.code}</span>
+                  <span className={` ${index === stageIndex ? 'text-cyan-300' : 'text-gray-500'}`}>{stage.code}</span>
                   <span className="text-gray-400">{stage.title}</span>
                 </div>
                 <p className="text-[11px] text-gray-300 leading-snug mt-1">
@@ -223,7 +267,23 @@ export default function App() {
               {deathBanner === 'lava' ? 'Core temperature exceeded.' : 'Trajectory left safe volume.'}
             </div>
             <div className="text-[11px] text-gray-300 mt-1">
-              Reinitializing clone at last checkpoint...
+              Reinitializing clone at stage entry point...
+            </div>
+          </div>
+        </div>
+      )}
+
+      {transitionInfo && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="bg-black/60 border border-cyan-400/40 px-8 py-6 rounded-lg text-center font-mono text-white shadow-[0_0_30px_rgba(0,255,255,0.25)] animate-pulse">
+            <div className="text-cyan-300 tracking-[0.4em] text-xs">
+              {transitionInfo.type === 'final' ? 'SIMULATION CLEAR' : 'STAGE COMPLETE'}
+            </div>
+            <div className="text-lg font-semibold mt-2">
+              {STAGES[transitionInfo.from].title}
+            </div>
+            <div className="text-[11px] text-gray-300 mt-2">
+              Routing neural link to {STAGES[transitionInfo.to].code} · {STAGES[transitionInfo.to].title}
             </div>
           </div>
         </div>

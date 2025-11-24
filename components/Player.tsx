@@ -12,21 +12,19 @@ const GRAVITY = 18.0;
 const PLAYER_RADIUS = 0.3;
 const PLAYER_EYE_HEIGHT = 1.7;
 const DEATH_HEIGHT = -2.5;
-const RESPAWN_HEIGHT = -8;
-const START_POINT = new THREE.Vector3(0, PLAYER_EYE_HEIGHT, 8);
-const CHECKPOINTS = [
-  { triggerZ: -35, position: new THREE.Vector3(0, 2, -42) },
-  { triggerZ: -70, position: new THREE.Vector3(0, 2.2, -82) },
-  { triggerZ: -105, position: new THREE.Vector3(0, 3.2, -118) },
-];
 
 interface PlayerProps {
   currentGun: GunType;
   onShoot: (origin: THREE.Vector3, direction: THREE.Vector3) => void;
   onDeath?: (reason: 'lava' | 'void') => void;
+  onStageComplete?: () => void;
+  spawnPoint: THREE.Vector3;
+  goalZ: number;
+  stageId: number;
+  isFrozen?: boolean;
 }
 
-export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath }) => {
+export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, onStageComplete, spawnPoint, goalZ, stageId, isFrozen = false }) => {
   const { camera, scene } = useThree();
   const [isLocked, setIsLocked] = useState(false);
   const moveForward = useRef(false);
@@ -50,9 +48,8 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath }) 
   const jellyNormal = useRef(new THREE.Vector3(0, 1, 0));
   const mirrorBoost = useRef(new THREE.Vector3());
   const surfaceType = useRef<GunType | null>(null);
-  const checkpointRef = useRef(START_POINT.clone());
-  const checkpointStageRef = useRef(0);
   const deathCooldown = useRef(0);
+  const stageCompleteRef = useRef(false);
 
   // Frame counter ref
   const frameCounter = useRef(0);
@@ -135,8 +132,11 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath }) 
   }, [isLocked, currentGun]); 
 
   useEffect(() => {
-    camera.position.copy(START_POINT);
-  }, [camera]);
+    camera.position.copy(spawnPoint);
+    velocity.current.set(0, 0, 0);
+    canJump.current = true;
+    stageCompleteRef.current = false;
+  }, [camera, spawnPoint, stageId]);
 
   const handleShoot = () => {
       // Calculate origin and direction
@@ -206,19 +206,19 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath }) 
     if (deathCooldown.current > 0) return;
     deathCooldown.current = 1.2;
     onDeath?.(reason);
-    camera.position.copy(checkpointRef.current);
+    camera.position.copy(spawnPoint);
     velocity.current.set(0, 0, 0);
     canJump.current = true;
-  }, [camera, onDeath]);
+  }, [camera, onDeath, spawnPoint]);
 
   useFrame((state, delta) => {
-    if (!isLocked) return;
+    if (!isLocked || isFrozen) return;
 
     // --- PHYSICS / MOVEMENT ---
     
     // 1. Jelly Detection (Raycasting)
     downRaycaster.current.set(camera.position, new THREE.Vector3(0, -1, 0));
-    downRaycaster.current.far = 2.0; // Eye height (1.7) + tolerance
+    downRaycaster.current.far = PLAYER_EYE_HEIGHT + 6; // allow lava plane detection well below feet
     
     const intersects = downRaycaster.current.intersectObjects(scene.children, true);
     isOnJelly.current = false;
@@ -227,13 +227,30 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath }) 
     jellyNormal.current.set(0, 1, 0);
     mirrorBoost.current.set(0, 0, 0);
 
+    let groundFound = false;
+    let groundSafe = false;
+    const feetY = camera.position.y - PLAYER_EYE_HEIGHT;
+
     for (const hit of intersects) {
-      if (hit.object.userData?.isLava) {
-        triggerDeath('lava');
+      const data = hit.object.userData ?? {};
+      if (data.isLava) {
+        if (feetY <= hit.point.y + 0.2) {
+          triggerDeath('lava');
+          break;
+        }
+        continue;
+      }
+
+      if (data.isSafeSurface && !data.isInteractive) {
+        groundFound = true;
+        groundSafe = true;
         break;
       }
-      if (hit.object.userData.isInteractive) {
-        surfaceType.current = hit.object.userData.type ?? null;
+
+      if (data.isInteractive) {
+        groundFound = true;
+        surfaceType.current = data.type ?? null;
+
         if (surfaceType.current === GunType.JELLY) {
           isOnJelly.current = true;
           if (hit.face) {
@@ -243,13 +260,21 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath }) 
         }
         if (surfaceType.current === GunType.MIRROR) {
           isOnMirror.current = true;
-          if (hit.object.userData.contactBoost) {
-            const boost = hit.object.userData.contactBoost as [number, number, number];
+          if (data.contactBoost) {
+            const boost = data.contactBoost as [number, number, number];
             mirrorBoost.current.set(boost[0], boost[1], boost[2]);
           }
         }
-            break; // Found the ground
+
+        if (data.isSafeSurface || data.isTargetSurface) {
+          groundSafe = true;
         }
+        break;
+      }
+    }
+
+    if (groundFound && !groundSafe && velocity.current.y <= 0) {
+      triggerDeath('void');
     }
 
     // 2. Aim Detection (Crosshair)
@@ -275,37 +300,25 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath }) 
 
     velocity.current.y -= GRAVITY * delta;
     camera.position.y += velocity.current.y * delta;
-    
-    if (camera.position.y < PLAYER_EYE_HEIGHT) {
-      camera.position.y = PLAYER_EYE_HEIGHT;
+
+    if (checkCollision(camera.position)) {
+      if (velocity.current.y > 0) {
+        camera.position.y -= velocity.current.y * delta;
         velocity.current.y = 0;
-        canJump.current = true;
-    } else {
-       if (checkCollision(camera.position)) {
-           if (velocity.current.y > 0) {
-               // Hit head
-               camera.position.y -= velocity.current.y * delta; // Undo move
-               velocity.current.y = 0;
-           } 
-           else if (velocity.current.y < 0) {
-                // Landing
-                const oldVelocityY = velocity.current.y;
-                camera.position.y -= oldVelocityY * delta; // Undo move
-                
-                if (isOnJelly.current && oldVelocityY < -2.0) {
-                    // Trampoline Effect
-                    // Bounce direction: Normal * Speed * Damping
-                    const speed = -oldVelocityY * 0.9;
-                    velocity.current.copy(jellyNormal.current).multiplyScalar(speed);
-                } else {
-                    velocity.current.y = 0;
-                    canJump.current = true;
-                  if (isOnMirror.current && mirrorBoost.current.lengthSq() > 0.01) {
-                    velocity.current.add(mirrorBoost.current);
-                  }
-                }
-           }
-       }
+      } else if (velocity.current.y < 0) {
+        const oldVelocityY = velocity.current.y;
+        camera.position.y -= oldVelocityY * delta;
+        if (isOnJelly.current && oldVelocityY < -2.0) {
+          const speed = -oldVelocityY * 0.9;
+          velocity.current.copy(jellyNormal.current).multiplyScalar(speed);
+        } else {
+          velocity.current.y = 0;
+          canJump.current = true;
+          if (isOnMirror.current && mirrorBoost.current.lengthSq() > 0.01) {
+            velocity.current.add(mirrorBoost.current);
+          }
+        }
+      }
     }
 
     // Damping
@@ -341,15 +354,13 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath }) 
         velocity.current.z = 0;
     }
 
-    CHECKPOINTS.forEach((checkpoint, index) => {
-      if (camera.position.z < checkpoint.triggerZ && checkpointStageRef.current < index + 1) {
-        checkpointRef.current.copy(checkpoint.position);
-        checkpointStageRef.current = index + 1;
-      }
-    });
-
     if (camera.position.y < DEATH_HEIGHT) {
       triggerDeath(camera.position.z < -5 ? 'lava' : 'void');
+    }
+
+    if (!stageCompleteRef.current && camera.position.z < goalZ) {
+      stageCompleteRef.current = true;
+      onStageComplete?.();
     }
 
     if (deathCooldown.current > 0) {

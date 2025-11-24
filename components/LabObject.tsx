@@ -10,6 +10,9 @@ interface LabObjectProps {
   size?: [number, number, number];
   contactBoost?: [number, number, number];
   initialType?: GunType | null;
+  resetToken?: number;
+  isTargetSurface?: boolean;
+  isSafeSurface?: boolean;
 }
 
 // Inner Mesh Component to handle the specific rendering logic and refs
@@ -18,12 +21,16 @@ const LabObjectMesh = ({
   type, 
   hitHandler,
   size,
-  contactBoost
+  contactBoost,
+  isTargetSurface = false,
+  isSafeSurface = false
 }: { 
   type: GunType | null, 
   hitHandler: (t: GunType) => void,
   size: [number, number, number],
-  contactBoost?: [number, number, number]
+  contactBoost?: [number, number, number],
+  isTargetSurface?: boolean,
+  isSafeSurface?: boolean
 }) => {
     const meshRef = useRef<THREE.Mesh>(null);
 
@@ -46,7 +53,15 @@ const LabObjectMesh = ({
       <mesh 
         ref={meshRef} 
         // IMPORTANT: Add type to userData for collision detection in Player.tsx
-        userData={{ isInteractive: true, hitHandler: hitHandler, type: type, size, contactBoost }}
+        userData={{
+          isInteractive: true,
+          hitHandler: hitHandler,
+          type: type,
+          size,
+          contactBoost,
+          isTargetSurface,
+          isSafeSurface,
+        }}
         castShadow 
         receiveShadow
       >
@@ -68,8 +83,12 @@ const LabObjectMesh = ({
     );
 };
 
-    export const LabObject: React.FC<LabObjectProps> = ({ position, rotation = [0, 0, 0], size = [1.5, 1.5, 1.5], contactBoost, initialType = null }) => {
-  const [type, setType] = useState<GunType | null>(initialType);
+    export const LabObject: React.FC<LabObjectProps> = ({ position, rotation = [0, 0, 0], size = [1.5, 1.5, 1.5], contactBoost, initialType = null, resetToken = 0, isTargetSurface, isSafeSurface }) => {
+      const [type, setType] = useState<GunType | null>(initialType);
+
+      React.useEffect(() => {
+        setType(initialType ?? null);
+      }, [initialType, resetToken]);
   
   const hit = (gunType: GunType) => {
     setType(gunType);
@@ -77,7 +96,14 @@ const LabObjectMesh = ({
 
   return (
     <group position={position} rotation={rotation}>
-      <LabObjectMesh type={type} hitHandler={hit} size={size} contactBoost={contactBoost} />
+      <LabObjectMesh
+        type={type}
+        hitHandler={hit}
+        size={size}
+        contactBoost={contactBoost}
+        isTargetSurface={isTargetSurface}
+        isSafeSurface={isSafeSurface}
+      />
     </group>
   );
 };
