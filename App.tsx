@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Stats, Loader } from '@react-three/drei';
+import { Loader } from '@react-three/drei';
 import * as THREE from 'three';
 import { Player } from './components/Player';
 import { World } from './components/World';
@@ -8,6 +8,24 @@ import { GunType, GUN_CONFIGS } from './types';
 import { JellyBullet } from './components/JellyBullet';
 import { GhostBullet } from './components/GhostBullet';
 import { MirrorBullet } from './components/MirrorBullet';
+
+const STAGE_INFO = [
+  {
+    code: '01',
+    title: 'Molten Hopscotch',
+    detail: 'Transmutate floating ruins into jelly trampolines and cross the magma void.',
+  },
+  {
+    code: '02',
+    title: 'Phase Crucible',
+    detail: 'Ghost the gate bricks to slip through sealed corridors and vertical shafts.',
+  },
+  {
+    code: '03',
+    title: 'Mirror Spire',
+    detail: 'Chrome the launch pads to harvest forward boosts and climb the prism tower.',
+  },
+];
 
 interface Bullet {
   id: number;
@@ -20,6 +38,8 @@ export default function App() {
   const [currentGun, setCurrentGun] = useState<GunType>(GunType.JELLY);
   const [isInfoExpanded, setIsInfoExpanded] = useState(true);
   const [bullets, setBullets] = useState<Bullet[]>([]);
+  const [deathCount, setDeathCount] = useState(0);
+  const [deathBanner, setDeathBanner] = useState<'lava' | 'void' | null>(null);
 
   const handleShoot = (origin: THREE.Vector3, direction: THREE.Vector3) => {
       // All guns now use projectiles
@@ -30,6 +50,17 @@ export default function App() {
   const removeBullet = (id: number) => {
       setBullets(prev => prev.filter(b => b.id !== id));
   };
+
+  const handleDeath = (reason: 'lava' | 'void') => {
+    setDeathCount(prev => prev + 1);
+    setDeathBanner(reason);
+  };
+
+  useEffect(() => {
+    if (!deathBanner) return;
+    const timeout = setTimeout(() => setDeathBanner(null), 1500);
+    return () => clearTimeout(timeout);
+  }, [deathBanner]);
 
   // Keyboard controls for weapon switching
   useEffect(() => {
@@ -45,12 +76,12 @@ export default function App() {
   return (
     <div className="relative w-full h-full bg-gray-900">
       {/* --- 3D SCENE --- */}
-      <Canvas shadows camera={{ fov: 75, position: [0, 1.7, 5] }}>
+      <Canvas shadows dpr={[1, 1.5]} camera={{ fov: 75, position: [0, 1.7, 5] }}>
         <Suspense fallback={null}>
            <color attach="background" args={['#111']} />
            <fog attach="fog" args={['#111', 5, 30]} />
            <World />
-           <Player currentGun={currentGun} onShoot={handleShoot} />
+           <Player currentGun={currentGun} onShoot={handleShoot} onDeath={handleDeath} />
            {bullets.map(b => {
               if (b.type === GunType.JELLY) {
                 return (
@@ -148,14 +179,55 @@ export default function App() {
                 <li><span className="text-cyan-400">[SPACE]</span>   Jump</li>
                 <li><span className="text-cyan-400">[CLICK]</span>   Transmutate</li>
                 <li><span className="text-cyan-400">[1,2,3]</span>   Switch Module</li>
+                <li><span className="text-cyan-400">[VOID/LAVA]</span> Fatal fall</li>
                 </ul>
                 <div className="mt-3 pt-2 border-t border-white/10 text-[10px] text-gray-500">
                     Sys: ONLINE<br/>
-                    Mode: EXPERIMENTAL
+                  Mode: EXPERIMENTAL<br/>
+                  Failsafe: Checkpoint respawn
                 </div>
             </div>
         )}
       </div>
+
+      {/* Level Briefing */}
+      <div className="absolute top-6 right-6 text-white pointer-events-none w-64">
+        <div className="bg-black/55 backdrop-blur-sm border border-white/10 rounded-lg p-4">
+          <div className="text-[11px] tracking-[0.3em] text-gray-400 font-mono mb-3">LEVEL BRIEFING</div>
+          <div className="space-y-3">
+            {STAGE_INFO.map(stage => (
+              <div key={stage.code} className="border-l-2 border-white/15 pl-3">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-cyan-300">{stage.code}</span>
+                  <span className="text-gray-400">{stage.title}</span>
+                </div>
+                <p className="text-[11px] text-gray-300 leading-snug mt-1">
+                  {stage.detail}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 text-[11px] text-gray-400 text-right font-mono">
+            Fatalities logged: {deathCount}
+          </div>
+        </div>
+      </div>
+
+      {deathBanner && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="bg-black/70 border border-red-400/40 px-8 py-5 rounded-lg text-center font-mono text-white shadow-[0_0_25px_rgba(255,0,0,0.3)]">
+            <div className="text-red-400 tracking-[0.4em] text-xs">
+              {deathBanner === 'lava' ? 'THERMAL FAILURE' : 'VOID BREACH'}
+            </div>
+            <div className="text-lg font-semibold mt-2">
+              {deathBanner === 'lava' ? 'Core temperature exceeded.' : 'Trajectory left safe volume.'}
+            </div>
+            <div className="text-[11px] text-gray-300 mt-1">
+              Reinitializing clone at last checkpoint...
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Click to Start Overlay */}
       {/* <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none">

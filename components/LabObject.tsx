@@ -1,12 +1,14 @@
 import React, { useState, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { CubeCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import { GunType } from '../types';
 import { JellyMaterial, GhostMaterial, MirrorMaterial, GhostWireframeMaterial, LabMaterial } from './Materials';
 
 interface LabObjectProps {
   position: [number, number, number];
+  rotation?: [number, number, number];
+  size?: [number, number, number];
+  contactBoost?: [number, number, number];
   initialType?: GunType | null;
 }
 
@@ -14,12 +16,14 @@ interface LabObjectProps {
 // This allows us to wrap it conditionally with CubeCamera without code duplication
 const LabObjectMesh = ({ 
   type, 
-  hitHandler, 
-  envMap 
+  hitHandler,
+  size,
+  contactBoost
 }: { 
   type: GunType | null, 
-  hitHandler: (t: GunType) => void, 
-  envMap?: THREE.Texture 
+  hitHandler: (t: GunType) => void,
+  size: [number, number, number],
+  contactBoost?: [number, number, number]
 }) => {
     const meshRef = useRef<THREE.Mesh>(null);
 
@@ -42,21 +46,21 @@ const LabObjectMesh = ({
       <mesh 
         ref={meshRef} 
         // IMPORTANT: Add type to userData for collision detection in Player.tsx
-        userData={{ isInteractive: true, hitHandler: hitHandler, type: type }}
+        userData={{ isInteractive: true, hitHandler: hitHandler, type: type, size, contactBoost }}
         castShadow 
         receiveShadow
       >
-        <boxGeometry args={[1.5, 1.5, 1.5, segments, segments, segments]} />
+        <boxGeometry args={[size[0], size[1], size[2], segments, segments, segments]} />
         
         {type === null && <LabMaterial />}
         {type === GunType.JELLY && <JellyMaterial color="#39FF14" />}
-        {type === GunType.MIRROR && <MirrorMaterial envMap={envMap} />}
+        {type === GunType.MIRROR && <MirrorMaterial />}
         {type === GunType.GHOST && <GhostMaterial />}
         
         {/* Ghost needs a second mesh for the wireframe overlay effect */}
         {type === GunType.GHOST && (
-            <mesh scale={[1.01, 1.01, 1.01]}>
-                <boxGeometry args={[1.5, 1.5, 1.5]} />
+          <mesh scale={[1.01, 1.01, 1.01]}>
+            <boxGeometry args={[size[0], size[1], size[2]]} />
                 <GhostWireframeMaterial />
             </mesh>
         )}
@@ -64,7 +68,7 @@ const LabObjectMesh = ({
     );
 };
 
-export const LabObject: React.FC<LabObjectProps> = ({ position, initialType = null }) => {
+    export const LabObject: React.FC<LabObjectProps> = ({ position, rotation = [0, 0, 0], size = [1.5, 1.5, 1.5], contactBoost, initialType = null }) => {
   const [type, setType] = useState<GunType | null>(initialType);
   
   const hit = (gunType: GunType) => {
@@ -72,18 +76,8 @@ export const LabObject: React.FC<LabObjectProps> = ({ position, initialType = nu
   };
 
   return (
-    <group position={position}>
-      {type === GunType.MIRROR ? (
-         // If it is a mirror, wrap in CubeCamera to generate real-time reflection texture
-         // Optimization: Reduced resolution to 64 to improve performance
-         <CubeCamera resolution={64} frames={Infinity}>
-            {(texture) => (
-                <LabObjectMesh type={type} hitHandler={hit} envMap={texture} />
-            )}
-         </CubeCamera>
-      ) : (
-         <LabObjectMesh type={type} hitHandler={hit} />
-      )}
+    <group position={position} rotation={rotation}>
+      <LabObjectMesh type={type} hitHandler={hit} size={size} contactBoost={contactBoost} />
     </group>
   );
 };
