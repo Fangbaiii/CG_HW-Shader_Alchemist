@@ -253,6 +253,7 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot }) => {
                     // Bounce direction: Normal * Speed * Damping
                     const speed = -oldVelocityY * 0.9;
                     velocity.current.copy(jellyNormal.current).multiplyScalar(speed);
+                    canJump.current = true;
                 } else {
                     velocity.current.y = 0;
                     canJump.current = true;

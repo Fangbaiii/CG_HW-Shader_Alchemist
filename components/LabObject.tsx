@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { CubeCamera } from '@react-three/drei';
+import { CubeCamera, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { GunType } from '../types';
 import { JellyMaterial, GhostMaterial, MirrorMaterial, GhostWireframeMaterial, LabMaterial } from './Materials';
@@ -38,18 +38,36 @@ const LabObjectMesh = ({
     // Others can use standard low tessellation
     const segments = type === GunType.JELLY ? 32 : 1;
 
+    // Common props for the mesh
+    const meshProps = {
+        ref: meshRef,
+        userData: { isInteractive: true, hitHandler: hitHandler, type: type },
+        castShadow: true,
+        receiveShadow: true
+    };
+
+    // If it's JELLY, we use RoundedBox as the main mesh
+    if (type === GunType.JELLY) {
+        return (
+            <group>
+                {/* Back Face Mesh - Rendered first for volumetric look */}
+                <RoundedBox args={[1.5, 1.5, 1.5]} radius={0.2} smoothness={8} renderOrder={1}>
+                     <JellyMaterial color="#39FF14" side={THREE.BackSide} />
+                </RoundedBox>
+                {/* Front Face Mesh - Rendered second, handles interaction */}
+                <RoundedBox args={[1.5, 1.5, 1.5]} radius={0.2} smoothness={8} {...meshProps} renderOrder={2}>
+                     <JellyMaterial color="#39FF14" side={THREE.FrontSide} />
+                </RoundedBox>
+            </group>
+        );
+    }
+
+    // For other types, we use a standard mesh with BoxGeometry
     return (
-      <mesh 
-        ref={meshRef} 
-        // IMPORTANT: Add type to userData for collision detection in Player.tsx
-        userData={{ isInteractive: true, hitHandler: hitHandler, type: type }}
-        castShadow 
-        receiveShadow
-      >
+      <mesh {...meshProps}>
         <boxGeometry args={[1.5, 1.5, 1.5, segments, segments, segments]} />
         
         {type === null && <LabMaterial />}
-        {type === GunType.JELLY && <JellyMaterial color="#39FF14" />}
         {type === GunType.MIRROR && <MirrorMaterial envMap={envMap} />}
         {type === GunType.GHOST && <GhostMaterial />}
         
