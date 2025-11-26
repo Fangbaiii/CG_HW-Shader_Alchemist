@@ -34,34 +34,48 @@ const LAVA_COLUMNS: LabDefinition[] = [
 ];
 
 const GHOST_GATE: LabDefinition[] = [];
-const gateX = [-2.4, 0, 2.4];
-const gateY = [0.75, 2.25, 3.75];
-gateX.forEach((x) => {
-  gateY.forEach((y) => {
-    GHOST_GATE.push({ position: [x, y, -15], size: [1.8, 1.8, 0.9] });
-  });
-});
+
+// 1. Intro Gate (z = -6)
+GHOST_GATE.push({ position: [0, 1.5, -6], size: [3, 3, 0.5] });
+
+// 2. The Great Wall (z = -20)
+// A massive wall that requires a high jump or precise timing
+GHOST_GATE.push({ position: [0, 3, -20], size: [8, 8, 1] });
+
+// 3. The Triple Filter (z = -32, -35, -38)
+// Thin sheets that must be breached in rapid succession
+GHOST_GATE.push({ position: [0, 2, -32], size: [4, 4, 0.2] });
+GHOST_GATE.push({ position: [0, 2, -35], size: [4, 4, 0.2] });
+GHOST_GATE.push({ position: [0, 2, -38], size: [4, 4, 0.2] });
 
 const GHOST_GALLERY: LabDefinition[] = [
-  { position: [-3.5, 1.2, -28], size: [1, 4, 1], isTargetSurface: true },
-  { position: [3.5, 1.2, -28], size: [1, 4, 1], isTargetSurface: true },
-  { position: [-1.5, 2.8, -35], size: [1.5, 5, 1.5], isTargetSurface: true },
-  { position: [1.5, 2.8, -38], size: [1.5, 5, 1.5], isTargetSurface: true },
+  // Starting Platform extension
+  { position: [0, -0.5, -4], size: [4, 0.5, 6], isTargetSurface: true },
+  
+  // Platform before Great Wall
+  { position: [0, 0, -14], size: [4, 0.5, 6], isTargetSurface: true },
+  
+  // Platform after Great Wall
+  { position: [0, 0, -26], size: [4, 0.5, 6], isTargetSurface: true },
+  
+  // Goal Platform (after Triple Filter)
+  { position: [0, 0, -44], size: [6, 0.5, 8], isTargetSurface: true },
 ];
 
 const MIRROR_BOOSTERS: LabDefinition[] = [
-  { position: [0, 0.6, -12], size: [2, 0.6, 2], contactBoost: [0, 4, -4], isTargetSurface: true },
-  { position: [-2.1, 2.5, -18], size: [2, 0.6, 2], contactBoost: [1.5, 5, -4], isTargetSurface: true },
-  { position: [2.2, 4.6, -25], size: [2, 0.6, 2], contactBoost: [-1.2, 6, -4], isTargetSurface: true },
-  { position: [0.4, 7, -33], size: [2.2, 0.6, 2.2], contactBoost: [0.5, 7, -5], isTargetSurface: true },
-  { position: [0, 9.8, -41], size: [2.4, 0.6, 2.4], contactBoost: [0, 8, -6], isTargetSurface: true },
+  { position: [0, 0, -5], size: [3, 0.5, 3], contactBoost: [0, 5, -10], isTargetSurface: true },
+  { position: [0, 2, -18], size: [3, 0.5, 3], contactBoost: [0, 6, -12], isTargetSurface: true },
+  { position: [0, 5, -32], size: [3, 0.5, 3], contactBoost: [0, 7, -12], isTargetSurface: true },
+  { position: [0, 9, -48], size: [4, 0.5, 4], contactBoost: [0, 5, -5], isTargetSurface: true },
 ];
 
 const MIRROR_RIBS: LabDefinition[] = [
-  { position: [-4, 2, -20], size: [0.8, 6, 0.8] },
-  { position: [4, 2, -20], size: [0.8, 6, 0.8] },
-  { position: [-4.5, 3, -30], size: [0.8, 6, 0.8] },
-  { position: [4.5, 3, -30], size: [0.8, 6, 0.8] },
+  { position: [-5, 2, -10], size: [1, 10, 1] },
+  { position: [5, 2, -10], size: [1, 10, 1] },
+  { position: [-6, 4, -25], size: [1, 15, 1] },
+  { position: [6, 4, -25], size: [1, 15, 1] },
+  { position: [-7, 6, -40], size: [1, 20, 1] },
+  { position: [7, 6, -40], size: [1, 20, 1] },
 ];
 
 const Platform = ({
@@ -162,8 +176,7 @@ const StageTwoWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
     <directionalLight position={[8, 16, 6]} intensity={1.0} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
     <pointLight position={[0, 5, -20]} intensity={0.6} color="#7cf4ff" distance={35} />
 
-    <Platform position={[0, -0.25, 2]} size={[8, 0.5, 8]} safe interactive color="#1a1a1a" />
-    <Platform position={[0, -0.3, -20]} size={[6, 0.5, 30]} safe interactive color="#111" />
+    <Platform position={[0, -0.25, -2]} size={[8, 0.5, 8]} safe interactive color="#1a1a1a" />
     {GHOST_GATE.map((data, index) => (
       <LabObject key={`gate-${index}`} position={data.position} size={data.size} resetToken={resetToken} />
     ))}
@@ -176,7 +189,7 @@ const StageTwoWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
         isTargetSurface
       />
     ))}
-    <GoalBeacon position={[0, 6, -48]} />
+    <GoalBeacon position={[0, 2, -44]} />
   </>
 );
 
@@ -201,7 +214,7 @@ const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
         isTargetSurface
       />
     ))}
-    <GoalBeacon position={[0, 12, -50]} />
+    <GoalBeacon position={[0, 11, -48]} />
   </>
 );
 

@@ -21,7 +21,7 @@ const STAGES = [
     code: '02',
     title: 'Phase Crucible',
     detail: 'Ghost the gate bricks to slip through sealed corridors and vertical shafts.',
-    spawn: new THREE.Vector3(0, 1.8, 2),
+    spawn: new THREE.Vector3(0, 1.8, 0),
     goalZ: -44,
   },
   {
@@ -29,7 +29,7 @@ const STAGES = [
     title: 'Mirror Spire',
     detail: 'Chrome the launch pads to harvest forward boosts and climb the prism tower.',
     spawn: new THREE.Vector3(0, 1.9, 4),
-    goalZ: -46,
+    goalZ: -48,
   },
 ] as const;
 
