@@ -29,7 +29,7 @@ const STAGES = [
     title: 'Mirror Spire',
     detail: 'Chrome the launch pads to harvest forward boosts and climb the prism tower.',
     spawn: new THREE.Vector3(0, 1.9, 4),
-    goalZ: -48,
+    goalZ: -46,
   },
 ] as const;
 
@@ -100,6 +100,16 @@ export default function App() {
       if (e.key === '1') setCurrentGun(GunType.JELLY);
       if (e.key === '2') setCurrentGun(GunType.GHOST);
       if (e.key === '3') setCurrentGun(GunType.MIRROR);
+
+      // Developer Tools: Level Skipping
+      if (e.key === ']') {
+        setStageIndex((prev) => (prev + 1) % STAGES.length);
+        setResetToken((t) => t + 1);
+      }
+      if (e.key === '[') {
+        setStageIndex((prev) => (prev - 1 + STAGES.length) % STAGES.length);
+        setResetToken((t) => t + 1);
+      }
     };
     (window as any).addEventListener('keydown', handleKeyDown);
     return () => (window as any).removeEventListener('keydown', handleKeyDown);
@@ -221,6 +231,7 @@ export default function App() {
                 <li><span className="text-cyan-400">[CLICK]</span>   Transmutate</li>
                 <li><span className="text-cyan-400">[1,2,3]</span>   Switch Module</li>
                 <li><span className="text-cyan-400">[VOID/LAVA]</span> Fatal fall</li>
+                <li className="pt-1 mt-1 border-t border-white/10 text-yellow-500/80"><span className="text-yellow-400">[ [ / ] ]</span>   Dev: Skip Level</li>
                 </ul>
                 <div className="mt-3 pt-2 border-t border-white/10 text-[10px] text-gray-500">
                     Sys: ONLINE<br/>

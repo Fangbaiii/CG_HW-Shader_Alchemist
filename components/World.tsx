@@ -63,19 +63,30 @@ const GHOST_GALLERY: LabDefinition[] = [
 ];
 
 const MIRROR_BOOSTERS: LabDefinition[] = [
-  { position: [0, 0, -5], size: [3, 0.5, 3], contactBoost: [0, 5, -10], isTargetSurface: true },
-  { position: [0, 2, -18], size: [3, 0.5, 3], contactBoost: [0, 6, -12], isTargetSurface: true },
-  { position: [0, 5, -32], size: [3, 0.5, 3], contactBoost: [0, 7, -12], isTargetSurface: true },
-  { position: [0, 9, -48], size: [4, 0.5, 4], contactBoost: [0, 5, -5], isTargetSurface: true },
+  // 1. Base Launcher
+  { position: [0, 0, -4], size: [4, 0.5, 4], contactBoost: [0, 15, -10], isTargetSurface: true },
+  
+  // 2. Left Spire Platform
+  { position: [-6, 8, -14], size: [3, 0.5, 3], contactBoost: [12, 15, -10], isTargetSurface: true },
+  
+  // 3. Right Spire Platform
+  { position: [6, 16, -24], size: [3, 0.5, 3], contactBoost: [-12, 15, -10], isTargetSurface: true },
+  
+  // 4. Center High Platform
+  { position: [0, 24, -34], size: [3, 0.5, 3], contactBoost: [0, 15, -12], isTargetSurface: true },
+  
+  // 5. Summit Approach
+  { position: [0, 32, -46], size: [4, 0.5, 4], isTargetSurface: true },
 ];
 
 const MIRROR_RIBS: LabDefinition[] = [
-  { position: [-5, 2, -10], size: [1, 10, 1] },
-  { position: [5, 2, -10], size: [1, 10, 1] },
-  { position: [-6, 4, -25], size: [1, 15, 1] },
-  { position: [6, 4, -25], size: [1, 15, 1] },
-  { position: [-7, 6, -40], size: [1, 20, 1] },
-  { position: [7, 6, -40], size: [1, 20, 1] },
+  // Central Spire Core
+  { position: [0, 15, -24], size: [2, 40, 2] },
+  
+  // Floating Rings/Decor
+  { position: [0, 10, -24], size: [16, 0.5, 16], rotation: [0.2, 0, 0] },
+  { position: [0, 20, -24], size: [12, 0.5, 12], rotation: [-0.2, 0, 0] },
+  { position: [0, 30, -24], size: [8, 0.5, 8], rotation: [0.1, 0, 0] },
 ];
 
 const Platform = ({
@@ -202,7 +213,13 @@ const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
 
     <Platform position={[0, -0.25, 4]} size={[8, 0.5, 8]} safe interactive color="#050505" />
     {MIRROR_RIBS.map((data, index) => (
-      <LabObject key={`rib-${index}`} position={data.position} size={data.size} resetToken={resetToken} />
+      <LabObject 
+        key={`rib-${index}`} 
+        position={data.position} 
+        size={data.size} 
+        rotation={data.rotation}
+        resetToken={resetToken} 
+      />
     ))}
     {MIRROR_BOOSTERS.map((data, index) => (
       <LabObject
@@ -214,7 +231,7 @@ const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
         isTargetSurface
       />
     ))}
-    <GoalBeacon position={[0, 11, -48]} />
+    <GoalBeacon position={[0, 34, -46]} />
   </>
 );
 
