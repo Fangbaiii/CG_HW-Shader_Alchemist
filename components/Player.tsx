@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import { PointerLockControls, Hud, PerspectiveCamera, Environment } from '@react-three/drei';
 import * as THREE from 'three';
@@ -10,21 +10,14 @@ const SPEED = 3.5;
 const JUMP_FORCE = 9.0;
 const GRAVITY = 18.0;
 const PLAYER_RADIUS = 0.3;
-const PLAYER_EYE_HEIGHT = 1.7;
-const DEATH_HEIGHT = -2.5;
+const OBJECT_SIZE = 1.5; 
 
 interface PlayerProps {
   currentGun: GunType;
   onShoot: (origin: THREE.Vector3, direction: THREE.Vector3) => void;
-  onDeath?: (reason: 'lava' | 'void') => void;
-  onStageComplete?: () => void;
-  spawnPoint: THREE.Vector3;
-  goalZ: number;
-  stageId: number;
-  isFrozen?: boolean;
 }
 
-export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, onStageComplete, spawnPoint, goalZ, stageId, isFrozen = false }) => {
+export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot }) => {
   const { camera, scene } = useThree();
   const [isLocked, setIsLocked] = useState(false);
   const moveForward = useRef(false);
@@ -36,7 +29,7 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
   const velocity = useRef(new THREE.Vector3());
   const direction = useRef(new THREE.Vector3());
   const [isShooting, setIsShooting] = useState(false);
-  const [isHovering, setIsHovering] = useState(false);
+  const [isHovering, setIsHovering] = useState(false); // New state for hovering
 
   // Raycaster for shooting
   const raycaster = useRef(new THREE.Raycaster());
@@ -44,12 +37,7 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
   // Physics / Jelly Logic Refs
   const downRaycaster = useRef(new THREE.Raycaster());
   const isOnJelly = useRef(false);
-  const isOnMirror = useRef(false);
   const jellyNormal = useRef(new THREE.Vector3(0, 1, 0));
-  const mirrorBoost = useRef(new THREE.Vector3());
-  const surfaceType = useRef<GunType | null>(null);
-  const deathCooldown = useRef(0);
-  const stageCompleteRef = useRef(false);
 
   // Frame counter ref
   const frameCounter = useRef(0);
@@ -131,13 +119,6 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     };
   }, [isLocked, currentGun]); 
 
-  useEffect(() => {
-    camera.position.copy(spawnPoint);
-    velocity.current.set(0, 0, 0);
-    canJump.current = true;
-    stageCompleteRef.current = false;
-  }, [camera, spawnPoint, stageId]);
-
   const handleShoot = () => {
       // Calculate origin and direction
       // Origin: slightly in front of the camera to avoid clipping with player collider if any
@@ -157,7 +138,7 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
       */
   };
 
-    const checkCollision = (newPos: THREE.Vector3) => {
+  const checkCollision = (newPos: THREE.Vector3) => {
       const colliders: THREE.Object3D[] = [];
       scene.traverse((child) => {
           if (child.userData.isInteractive) {
@@ -172,24 +153,21 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
           const objPos = new THREE.Vector3();
           obj.getWorldPosition(objPos);
 
-        const size = (obj.userData.size as [number, number, number]) ?? [1.5, 1.5, 1.5];
-        const halfSizeX = size[0] / 2;
-        const halfSizeY = size[1] / 2;
-        const halfSizeZ = size[2] / 2;
-        const objMinX = objPos.x - halfSizeX;
-        const objMaxX = objPos.x + halfSizeX;
-        const objMinZ = objPos.z - halfSizeZ;
-        const objMaxZ = objPos.z + halfSizeZ;
-        const objMinY = objPos.y - halfSizeY;
-        const objMaxY = objPos.y + halfSizeY;
+          const halfSize = OBJECT_SIZE / 2;
+          const objMinX = objPos.x - halfSize;
+          const objMaxX = objPos.x + halfSize;
+          const objMinZ = objPos.z - halfSize;
+          const objMaxZ = objPos.z + halfSize;
+          const objMinY = objPos.y - halfSize;
+          const objMaxY = objPos.y + halfSize;
 
           const pMinX = newPos.x - PLAYER_RADIUS;
           const pMaxX = newPos.x + PLAYER_RADIUS;
           const pMinZ = newPos.z - PLAYER_RADIUS;
           const pMaxZ = newPos.z + PLAYER_RADIUS;
           
-        const pFeet = newPos.y - PLAYER_EYE_HEIGHT; 
-        const pHead = newPos.y + 0.1; 
+          const pFeet = newPos.y - 1.7; 
+          const pHead = newPos.y + 0.1; 
 
           const overlapX = pMinX <= objMaxX && pMaxX >= objMinX;
           const overlapZ = pMinZ <= objMaxZ && pMaxZ >= objMinZ;
@@ -202,80 +180,33 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
       return false;
   };
 
-  const triggerDeath = useCallback((reason: 'lava' | 'void') => {
-    if (deathCooldown.current > 0) return;
-    deathCooldown.current = 1.2;
-    onDeath?.(reason);
-    camera.position.copy(spawnPoint);
-    velocity.current.set(0, 0, 0);
-    canJump.current = true;
-  }, [camera, onDeath, spawnPoint]);
-
   useFrame((state, delta) => {
-    if (!isLocked || isFrozen) return;
+    if (!isLocked) return;
 
     // --- PHYSICS / MOVEMENT ---
     
     // 1. Jelly Detection (Raycasting)
     downRaycaster.current.set(camera.position, new THREE.Vector3(0, -1, 0));
-    downRaycaster.current.far = PLAYER_EYE_HEIGHT + 6; // allow lava plane detection well below feet
+    downRaycaster.current.far = 2.0; // Eye height (1.7) + tolerance
     
     const intersects = downRaycaster.current.intersectObjects(scene.children, true);
     isOnJelly.current = false;
-    isOnMirror.current = false;
-    surfaceType.current = null;
     jellyNormal.current.set(0, 1, 0);
-    mirrorBoost.current.set(0, 0, 0);
-
-    let groundFound = false;
-    let groundSafe = false;
-    const feetY = camera.position.y - PLAYER_EYE_HEIGHT;
 
     for (const hit of intersects) {
-      const data = hit.object.userData ?? {};
-      if (data.isLava) {
-        if (feetY <= hit.point.y + 0.2) {
-          triggerDeath('lava');
-          break;
+        if (hit.object.userData.isInteractive) {
+            if (hit.object.userData.type === GunType.JELLY) {
+                isOnJelly.current = true;
+                if (hit.face) {
+                    jellyNormal.current.copy(hit.face.normal!);
+                    // Transform normal to world space to handle rotation
+                    // We use transformDirection which applies rotation of the object
+                    jellyNormal.current.transformDirection(hit.object.matrixWorld);
+                }
+            }
+            break; // Found the ground
         }
-        continue;
-      }
-
-      if (data.isSafeSurface && !data.isInteractive) {
-        groundFound = true;
-        groundSafe = true;
-        break;
-      }
-
-      if (data.isInteractive) {
-        groundFound = true;
-        surfaceType.current = data.type ?? null;
-
-        if (surfaceType.current === GunType.JELLY) {
-          isOnJelly.current = true;
-          if (hit.face) {
-            jellyNormal.current.copy(hit.face.normal!);
-            jellyNormal.current.transformDirection(hit.object.matrixWorld);
-          }
-        }
-        if (surfaceType.current === GunType.MIRROR) {
-          isOnMirror.current = true;
-          if (data.contactBoost) {
-            const boost = data.contactBoost as [number, number, number];
-            mirrorBoost.current.set(boost[0], boost[1], boost[2]);
-          }
-        }
-
-        if (data.isSafeSurface || data.isTargetSurface) {
-          groundSafe = true;
-        }
-        break;
-      }
     }
-
-    // if (groundFound && !groundSafe && velocity.current.y <= 0) {
-    //   triggerDeath('void');
-    // }
 
     // 2. Aim Detection (Crosshair)
     // Optimization: Run raycast only every 4 frames to save performance
@@ -300,10 +231,9 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
 
     velocity.current.y -= GRAVITY * delta;
     camera.position.y += velocity.current.y * delta;
-
-    if (checkCollision(camera.position)) {
-      if (velocity.current.y > 0) {
-        camera.position.y -= velocity.current.y * delta;
+    
+    if (camera.position.y < 1.7) {
+        camera.position.y = 1.7;
         velocity.current.y = 0;
         canJump.current = true;
     } else {
@@ -365,18 +295,8 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
         velocity.current.z = 0;
     }
 
-    if (camera.position.y < DEATH_HEIGHT) {
-      triggerDeath(camera.position.z < -5 ? 'lava' : 'void');
-    }
-
-    if (!stageCompleteRef.current && camera.position.z < goalZ) {
-      stageCompleteRef.current = true;
-      onStageComplete?.();
-    }
-
-    if (deathCooldown.current > 0) {
-      deathCooldown.current = Math.max(0, deathCooldown.current - delta);
-    }
+    // Increment frame counter
+    frameCounter.current++;
   }); 
 
   return (
