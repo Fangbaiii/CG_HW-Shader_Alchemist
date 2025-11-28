@@ -273,9 +273,9 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
       }
     }
 
-    if (groundFound && !groundSafe && velocity.current.y <= 0) {
-      triggerDeath('void');
-    }
+    // if (groundFound && !groundSafe && velocity.current.y <= 0) {
+    //   triggerDeath('void');
+    // }
 
     // 2. Aim Detection (Crosshair)
     // Optimization: Run raycast only every 4 frames to save performance
