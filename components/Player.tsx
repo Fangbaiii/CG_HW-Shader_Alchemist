@@ -185,6 +185,9 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     const checkCollision = (newPos: THREE.Vector3) => {
       // Use cached colliders instead of traversing scene
       for (const obj of collidersRef.current) {
+          // FIX: Skip detached objects (stale references)
+          if (!obj.parent) continue;
+
           // Ghost objects allow pass-through
           if (obj.userData.type === GunType.GHOST) continue;
 
@@ -259,6 +262,9 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
       return;
     }
 
+    // Clamp delta to prevent tunneling during lag spikes
+    const dt = Math.min(delta, 0.1);
+
     // --- PHYSICS / MOVEMENT ---
     
     // 1. Jelly Detection (Raycasting)
@@ -266,7 +272,8 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     downRaycaster.current.far = PLAYER_EYE_HEIGHT + 6; // allow lava plane detection well below feet
     
     // Use cached colliders for raycasting too
-    const intersects = downRaycaster.current.intersectObjects(collidersRef.current, false);
+    // FIX: Enable recursive raycasting to hit children meshes even if collidersRef contains Groups
+    const intersects = downRaycaster.current.intersectObjects(collidersRef.current, true);
     isOnJelly.current = false;
     isOnMirror.current = false;
     surfaceType.current = null;
@@ -278,7 +285,16 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     const feetY = camera.position.y - PLAYER_EYE_HEIGHT;
 
     for (const hit of intersects) {
-      const data = hit.object.userData ?? {};
+      // Traverse up to find interactive data
+      let target = hit.object;
+      let data = target.userData ?? {};
+      
+      // If current object isn't interactive, check parents
+      while(target && !data.isInteractive && !data.isSafeSurface && !data.isLava && target.parent) {
+          target = target.parent;
+          data = target.userData ?? {};
+      }
+
       if (data.isLava) {
         if (feetY <= hit.point.y + 0.2) {
           triggerDeath('lava');
@@ -332,10 +348,18 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
         // Limit distance for interaction feedback if desired, or infinite
         raycaster.current.far = 100; 
         // Use cached colliders for aim detection too
-        const aimIntersects = raycaster.current.intersectObjects(collidersRef.current, false);
+        // FIX: Enable recursive raycasting to hit children meshes even if collidersRef contains Groups
+        const aimIntersects = raycaster.current.intersectObjects(collidersRef.current, true);
         let foundInteractive = false;
         for (const hit of aimIntersects) {
-            if (hit.object.userData.isInteractive) {
+            let target = hit.object;
+            let data = target.userData ?? {};
+            while(target && !data.isInteractive && target.parent) {
+                target = target.parent;
+                data = target.userData ?? {};
+            }
+
+            if (data.isInteractive) {
                 foundInteractive = true;
                 break;
             }
@@ -345,18 +369,18 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
         }
     }
 
-    velocity.current.y -= GRAVITY * delta;
-    camera.position.y += velocity.current.y * delta;
+    velocity.current.y -= GRAVITY * dt;
+    camera.position.y += velocity.current.y * dt;
 
     if (checkCollision(camera.position)) {
       if (velocity.current.y > 0) {
         // Hit head
-        camera.position.y -= velocity.current.y * delta;
+        camera.position.y -= velocity.current.y * dt;
         velocity.current.y = 0;
       } else {
         // Landing
         const oldVelocityY = velocity.current.y;
-        camera.position.y -= oldVelocityY * delta; // Undo move
+        camera.position.y -= oldVelocityY * dt; // Undo move
         
         if (isOnJelly.current && oldVelocityY < -2.0) {
             // Trampoline Effect
@@ -372,15 +396,15 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     }
 
     // Damping
-    velocity.current.x -= velocity.current.x * 10.0 * delta;
-    velocity.current.z -= velocity.current.z * 10.0 * delta;
+    velocity.current.x -= velocity.current.x * 10.0 * dt;
+    velocity.current.z -= velocity.current.z * 10.0 * dt;
 
     direction.current.z = Number(moveForward.current) - Number(moveBackward.current);
     direction.current.x = Number(moveRight.current) - Number(moveLeft.current);
     direction.current.normalize();
 
-    if (moveForward.current || moveBackward.current) velocity.current.z += direction.current.z * 40.0 * delta * SPEED;
-    if (moveLeft.current || moveRight.current) velocity.current.x -= direction.current.x * 40.0 * delta * SPEED;
+    if (moveForward.current || moveBackward.current) velocity.current.z += direction.current.z * 40.0 * dt * SPEED;
+    if (moveLeft.current || moveRight.current) velocity.current.x -= direction.current.x * 40.0 * dt * SPEED;
 
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
     forward.y = 0;
@@ -390,14 +414,14 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     right.y = 0;
     right.normalize();
 
-    const moveX = right.clone().multiplyScalar(-velocity.current.x * delta);
+    const moveX = right.clone().multiplyScalar(-velocity.current.x * dt);
     camera.position.add(moveX);
     if (checkCollision(camera.position)) {
         camera.position.sub(moveX); 
         velocity.current.x = 0;
     }
 
-    const moveZ = forward.clone().multiplyScalar(velocity.current.z * delta);
+    const moveZ = forward.clone().multiplyScalar(velocity.current.z * dt);
     camera.position.add(moveZ);
     if (checkCollision(camera.position)) {
         camera.position.sub(moveZ); 

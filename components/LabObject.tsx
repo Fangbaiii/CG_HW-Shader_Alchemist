@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { CubeCamera, RoundedBox } from '@react-three/drei';
+import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { GunType } from '../types';
 import { JellyMaterial, GhostMaterial, MirrorMaterial, GhostWireframeMaterial, LabMaterial } from './Materials';
@@ -47,14 +47,9 @@ const LabObjectMesh = ({
     const meshProps = {
         ref: meshRef,
         userData: { 
-            isInteractive: true, 
-            hitHandler: hitHandler, 
-            type: type,
-            // 关键：传递这些属性给 Player.tsx 进行碰撞和安全检测
-            size,
-            contactBoost,
-            isTargetSurface,
-            isSafeSurface
+            // Optimization: Removed isInteractive and other logic props from Mesh
+            // because they are now on the parent Group. This prevents double-counting
+            // in collision systems and improves performance.
         },
         castShadow: true,
         receiveShadow: true
@@ -100,7 +95,10 @@ export const LabObject: React.FC<LabObjectProps> = ({
     initialType = null, 
     size = [1.5, 1.5, 1.5],
     resetToken,
-    ...props // 传递剩余的 props (isSafeSurface 等)
+    contactBoost,
+    isTargetSurface,
+    isSafeSurface,
+    ...props 
 }) => {
   const [type, setType] = useState<GunType | null>(initialType);
   
@@ -113,27 +111,24 @@ export const LabObject: React.FC<LabObjectProps> = ({
   };
 
   return (
-    <group position={position}>
-      {type === GunType.MIRROR ? (
-         <CubeCamera resolution={64} frames={Infinity}>
-            {(texture) => (
-                <LabObjectMesh 
-                    type={type} 
-                    hitHandler={hit} 
-                    envMap={texture} 
-                    size={size}
-                    {...props} 
-                />
-            )}
-         </CubeCamera>
-      ) : (
+    <group position={position} userData={{ 
+        isInteractive: true, 
+        hitHandler: hit, 
+        type: type,
+        size,
+        contactBoost,
+        isTargetSurface,
+        isSafeSurface
+    }}>
          <LabObjectMesh 
             type={type} 
             hitHandler={hit} 
             size={size}
+            contactBoost={contactBoost}
+            isTargetSurface={isTargetSurface}
+            isSafeSurface={isSafeSurface}
             {...props} 
          />
-      )}
     </group>
   );
 };

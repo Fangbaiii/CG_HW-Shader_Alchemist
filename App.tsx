@@ -122,8 +122,6 @@ export default function App() {
       <ErrorBoundary>
           <Canvas shadows dpr={[1, 1.5]} camera={{ fov: 75, position: [0, 1.7, 5] }}>
             <Suspense fallback={null}>
-              <color attach="background" args={['#111']} />
-           <fog attach="fog" args={['#111', 5, 30]} />
            <World resetToken={resetToken} stageIndex={stageIndex} />
            <Player
              currentGun={currentGun}

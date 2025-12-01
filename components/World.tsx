@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { LabObject } from './LabObject';
 import { Signboard } from './Signboard';
 import { GunType } from '../types';
+import { LavaMaterial } from './Materials';
 
 type LabDefinition = {
   position: [number, number, number];
@@ -122,18 +123,10 @@ const Platform = ({
 };
 
 const LavaPlane: React.FC = () => {
-  const materialRef = React.useRef<THREE.MeshStandardMaterial>(null);
-
-  useFrame((state) => {
-    if (materialRef.current) {
-      materialRef.current.emissiveIntensity = 0.4 + Math.sin(state.clock.elapsedTime * 2) * 0.2;
-    }
-  });
-
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -3, -20]} receiveShadow userData={{ isLava: true }}>
-      <planeGeometry args={[120, 120]} />
-      <meshStandardMaterial ref={materialRef} color="#320505" emissive="#ff4d1d" roughness={0.5} metalness={0.05} />
+      <planeGeometry args={[120, 120, 64, 64]} />
+      <LavaMaterial />
     </mesh>
   );
 };
@@ -158,6 +151,8 @@ interface StageWorldProps {
 
 const StageOneWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
   <>
+    <color attach="background" args={['#200505']} />
+    <fog attach="fog" args={['#200505', 5, 40]} />
     <Environment preset="sunset" />
     <ambientLight intensity={0.3} />
     <directionalLight position={[12, 18, 4]} intensity={1.2} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
@@ -195,8 +190,10 @@ const StageOneWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
 
 const StageTwoWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
   <>
-    <Environment preset="city" />
-    <ambientLight intensity={0.25} />
+    <color attach="background" args={['#001212']} />
+    <fog attach="fog" args={['#001212', 6, 45]} />
+    <Environment preset="warehouse" />
+    <ambientLight intensity={0.4} />
     <directionalLight position={[8, 16, 6]} intensity={1.0} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
     <pointLight position={[0, 5, -20]} intensity={0.6} color="#7cf4ff" distance={35} />
 
@@ -219,6 +216,8 @@ const StageTwoWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
 
 const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
   <>
+    <color attach="background" args={['#050510']} />
+    <fog attach="fog" args={['#050510', 10, 60]} />
     <Environment preset="city" />
     <ambientLight intensity={0.2} />
     <directionalLight position={[6, 14, 2]} intensity={0.9} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
