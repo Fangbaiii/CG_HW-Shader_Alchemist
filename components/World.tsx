@@ -206,7 +206,7 @@ const StageTwoWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
 
 const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
   <>
-    <Environment preset="night" />
+    <Environment preset="city" />
     <ambientLight intensity={0.2} />
     <directionalLight position={[6, 14, 2]} intensity={0.9} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
     <pointLight position={[0, 8, -25]} intensity={0.7} color="#8bd0ff" distance={35} />
@@ -217,7 +217,7 @@ const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
         key={`rib-${index}`} 
         position={data.position} 
         size={data.size} 
-        rotation={data.rotation}
+        rotation={data.rotation || [0, 0, 0]}
         resetToken={resetToken} 
       />
     ))}
