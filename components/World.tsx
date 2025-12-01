@@ -3,6 +3,7 @@ import { Environment } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { LabObject } from './LabObject';
+import { Signboard } from './Signboard';
 import { GunType } from '../types';
 
 type LabDefinition = {
@@ -163,6 +164,18 @@ const StageOneWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
     <pointLight position={[0, 6, -10]} intensity={0.8} color="#ff7b39" distance={40} />
 
     <Platform position={[0, -0.25, 8]} size={[10, 0.5, 10]} safe interactive />
+    <Signboard 
+        position={[0, 5, 2]} 
+        rotation={[0.4, 0, 0]}
+        title="炼金术士试炼"
+        content={[
+            "欢迎来到模拟训练场。",
+            "按 [1] [2] [3] 切换元素枪。",
+            "左键射击以改变物质属性。",
+            "目标：抵达终点信标。",
+            "祝你好运，新兵。"
+        ]}
+    />
     <LavaPlane />
     {JELLY_FLOATERS.map((data, index) => (
       <LabObject

@@ -50,6 +50,31 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
   const surfaceType = useRef<GunType | null>(null);
   const deathCooldown = useRef(0);
   const stageCompleteRef = useRef(false);
+  const isDying = useRef(false);
+
+  // Optimization: Cache colliders to avoid traversing scene every frame
+  const collidersRef = useRef<THREE.Object3D[]>([]);
+
+  // Update colliders list periodically or on stage change
+  useEffect(() => {
+    const updateColliders = () => {
+      const gathered: THREE.Object3D[] = [];
+      scene.traverse((child) => {
+        if (child.userData.isInteractive || child.userData.isSafeSurface || child.userData.isLava) {
+          gathered.push(child);
+        }
+      });
+      collidersRef.current = gathered;
+    };
+
+    // Run immediately and on stage change
+    updateColliders();
+
+    // Run periodically to catch any late-mounted objects (e.g. async loading)
+    const interval = setInterval(updateColliders, 2000);
+
+    return () => clearInterval(interval);
+  }, [scene, stageId]);
 
   // Frame counter ref
   const frameCounter = useRef(0);
@@ -158,14 +183,8 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
   };
 
     const checkCollision = (newPos: THREE.Vector3) => {
-      const colliders: THREE.Object3D[] = [];
-      scene.traverse((child) => {
-          if (child.userData.isInteractive) {
-              colliders.push(child);
-          }
-      });
-
-      for (const obj of colliders) {
+      // Use cached colliders instead of traversing scene
+      for (const obj of collidersRef.current) {
           // Ghost objects allow pass-through
           if (obj.userData.type === GunType.GHOST) continue;
 
@@ -202,17 +221,43 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
       return false;
   };
 
-  const triggerDeath = useCallback((reason: 'lava' | 'void') => {
-    if (deathCooldown.current > 0) return;
-    deathCooldown.current = 1.2;
-    onDeath?.(reason);
+  const respawn = useCallback(() => {
     camera.position.copy(spawnPoint);
+    // Reset rotation completely to look forward (negative Z) and level horizon
+    camera.rotation.set(0, 0, 0);
     velocity.current.set(0, 0, 0);
     canJump.current = true;
-  }, [camera, onDeath, spawnPoint]);
+    isDying.current = false;
+    deathCooldown.current = 1.0;
+  }, [camera, spawnPoint]);
+
+  const triggerDeath = useCallback((reason: 'lava' | 'void') => {
+    if (isDying.current || deathCooldown.current > 0) return;
+    
+    isDying.current = true;
+    
+    // Stop horizontal movement immediately
+    velocity.current.x = 0;
+    velocity.current.z = 0;
+
+    onDeath?.(reason);
+
+    if (reason === 'lava') {
+        velocity.current.y = 6.0;
+    }
+    
+    setTimeout(respawn, 1200);
+  }, [onDeath, respawn]);
 
   useFrame((state, delta) => {
     if (!isLocked || isFrozen) return;
+
+    if (isDying.current) {
+      velocity.current.y -= GRAVITY * delta;
+      camera.position.add(velocity.current.clone().multiplyScalar(delta));
+      camera.rotation.z += delta * 2.0;
+      return;
+    }
 
     // --- PHYSICS / MOVEMENT ---
     
@@ -220,7 +265,8 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     downRaycaster.current.set(camera.position, new THREE.Vector3(0, -1, 0));
     downRaycaster.current.far = PLAYER_EYE_HEIGHT + 6; // allow lava plane detection well below feet
     
-    const intersects = downRaycaster.current.intersectObjects(scene.children, true);
+    // Use cached colliders for raycasting too
+    const intersects = downRaycaster.current.intersectObjects(collidersRef.current, false);
     isOnJelly.current = false;
     isOnMirror.current = false;
     surfaceType.current = null;
@@ -285,7 +331,8 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
         raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
         // Limit distance for interaction feedback if desired, or infinite
         raycaster.current.far = 100; 
-        const aimIntersects = raycaster.current.intersectObjects(scene.children, true);
+        // Use cached colliders for aim detection too
+        const aimIntersects = raycaster.current.intersectObjects(collidersRef.current, false);
         let foundInteractive = false;
         for (const hit of aimIntersects) {
             if (hit.object.userData.isInteractive) {

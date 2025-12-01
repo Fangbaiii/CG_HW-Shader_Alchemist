@@ -288,13 +288,16 @@ export default function App() {
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-black/60 border border-cyan-400/40 px-8 py-6 rounded-lg text-center font-mono text-white shadow-[0_0_30px_rgba(0,255,255,0.25)] animate-pulse">
             <div className="text-cyan-300 tracking-[0.4em] text-xs">
-              {transitionInfo.type === 'final' ? 'SIMULATION CLEAR' : 'STAGE COMPLETE'}
+              {transitionInfo.type === 'final' ? 'SIMULATION COMPLETE' : 'STAGE COMPLETE'}
             </div>
             <div className="text-lg font-semibold mt-2">
-              {STAGES[transitionInfo.from].title}
+              {transitionInfo.type === 'final' ? '恭喜夺冠！' : STAGES[transitionInfo.from].title}
             </div>
             <div className="text-[11px] text-gray-300 mt-2">
-              Routing neural link to {STAGES[transitionInfo.to].code} · {STAGES[transitionInfo.to].title}
+              {transitionInfo.type === 'final' 
+                ? '所有试炼已通过。你已成为一名合格的炼金术士。' 
+                : `Routing neural link to ${STAGES[transitionInfo.to].code} · ${STAGES[transitionInfo.to].title}`
+              }
             </div>
           </div>
         </div>
