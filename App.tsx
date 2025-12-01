@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Loader } from '@react-three/drei';
 import * as THREE from 'three';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Player } from './components/Player';
 import { World } from './components/World';
 import { GunType, GUN_CONFIGS } from './types';
@@ -118,9 +119,10 @@ export default function App() {
   return (
     <div className="relative w-full h-full bg-gray-900">
       {/* --- 3D SCENE --- */}
-      <Canvas shadows dpr={[1, 1.5]} camera={{ fov: 75, position: [0, 1.7, 5] }}>
-        <Suspense fallback={null}>
-           <color attach="background" args={['#111']} />
+      <ErrorBoundary>
+          <Canvas shadows dpr={[1, 1.5]} camera={{ fov: 75, position: [0, 1.7, 5] }}>
+            <Suspense fallback={null}>
+              <color attach="background" args={['#111']} />
            <fog attach="fog" args={['#111', 5, 30]} />
            <World resetToken={resetToken} stageIndex={stageIndex} />
            <Player
@@ -164,8 +166,9 @@ export default function App() {
               }
               return null;
            })}
-        </Suspense>
-      </Canvas>
+          </Suspense>
+        </Canvas>
+      </ErrorBoundary>
 
       <Loader />
 

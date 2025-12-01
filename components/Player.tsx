@@ -319,9 +319,9 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
       }
     }
 
-    if (groundFound && !groundSafe && velocity.current.y <= 0) {
-      triggerDeath('void');
-    }
+    // if (groundFound && !groundSafe && velocity.current.y <= 0) {
+    //   triggerDeath('void');
+    // }
 
     // 2. Aim Detection (Crosshair)
     // Optimization: Run raycast only every 4 frames to save performance
@@ -352,20 +352,31 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
       if (velocity.current.y > 0) {
         camera.position.y -= velocity.current.y * delta;
         velocity.current.y = 0;
-      } else if (velocity.current.y < 0) {
-        const oldVelocityY = velocity.current.y;
-        camera.position.y -= oldVelocityY * delta;
-        if (isOnJelly.current && oldVelocityY < -2.0) {
-          const speed = -oldVelocityY * 0.9;
-          velocity.current.copy(jellyNormal.current).multiplyScalar(speed);
-        } else {
-          velocity.current.y = 0;
-          canJump.current = true;
-          if (isOnMirror.current && mirrorBoost.current.lengthSq() > 0.01) {
-            velocity.current.add(mirrorBoost.current);
-          }
-        }
-      }
+        canJump.current = true;
+    } else {
+       if (checkCollision(camera.position)) {
+           if (velocity.current.y > 0) {
+               // Hit head
+               camera.position.y -= velocity.current.y * delta; // Undo move
+               velocity.current.y = 0;
+           } 
+           else if (velocity.current.y < 0) {
+                // Landing
+                const oldVelocityY = velocity.current.y;
+                camera.position.y -= oldVelocityY * delta; // Undo move
+                
+                if (isOnJelly.current && oldVelocityY < -2.0) {
+                    // Trampoline Effect
+                    // Bounce direction: Normal * Speed * Damping
+                    const speed = -oldVelocityY * 0.9;
+                    velocity.current.copy(jellyNormal.current).multiplyScalar(speed);
+                    canJump.current = true;
+                } else {
+                    velocity.current.y = 0;
+                    canJump.current = true;
+                }
+           }
+       }
     }
 
     // Damping
