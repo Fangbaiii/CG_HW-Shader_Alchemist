@@ -1,39 +1,17 @@
 import React from 'react';
-import { Environment } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
+import { Environment, Stars } from '@react-three/drei';
 import { LabObject } from './LabObject';
-import { Signboard } from './Signboard';
-import { GunType } from '../types';
-import { LavaMaterial } from './Materials';
+import { VolcanoWorld } from './VolcanoWorld';
+import { ObsidianMaterial } from './Materials';
 
 type LabDefinition = {
   position: [number, number, number];
   size?: [number, number, number];
   rotation?: [number, number, number];
   contactBoost?: [number, number, number];
-  initialType?: GunType | null;
   isTargetSurface?: boolean;
   isSafeSurface?: boolean;
 };
-
-const JELLY_FLOATERS: LabDefinition[] = [
-  { position: [-1.6, 0.5, -4], size: [1.6, 1.6, 1.6], isTargetSurface: true },
-  { position: [1.4, 1.3, -10], size: [1.7, 1.7, 1.7], isTargetSurface: true },
-  { position: [-1.2, 2.2, -17], size: [1.7, 1.7, 1.7], isTargetSurface: true },
-  { position: [2.4, 3.2, -24], size: [1.9, 1.9, 1.9], isTargetSurface: true },
-  { position: [0.2, 4.4, -31], size: [2.0, 2.0, 2.0], isTargetSurface: true },
-  { position: [1.9, 5.8, -38], size: [2.2, 1.8, 2.2], isTargetSurface: true },
-];
-
-const LAVA_COLUMNS: LabDefinition[] = [
-  { position: [-6, 2.5, -15], size: [1.2, 6, 1.2] },
-  { position: [6, 2.5, -15], size: [1.2, 6, 1.2] },
-  { position: [-8, 3.5, -27], size: [1.4, 7, 1.4] },
-  { position: [8, 3.5, -27], size: [1.4, 7, 1.4] },
-  { position: [-4, 1.5, -10], size: [1, 5, 1] },
-  { position: [4, 1.5, -10], size: [1, 5, 1] },
-];
 
 const GHOST_GATE: LabDefinition[] = [];
 
@@ -86,23 +64,26 @@ const MIRROR_RIBS: LabDefinition[] = [
   { position: [0, 15, -24], size: [2, 40, 2] },
   
   // Floating Rings/Decor
-  { position: [0, 10, -24], size: [16, 0.5, 16], rotation: [0.2, 0, 0] },
-  { position: [0, 20, -24], size: [12, 0.5, 12], rotation: [-0.2, 0, 0] },
-  { position: [0, 30, -24], size: [8, 0.5, 8], rotation: [0.1, 0, 0] },
+  { position: [0, 10, -24], size: [16, 0.5, 16] },
+  { position: [0, 20, -24], size: [12, 0.5, 12] },
+  { position: [0, 30, -24], size: [8, 0.5, 8] },
 ];
 
-const Platform = ({
+// 第二关和第三关的平台组件 - 简单立方体
+const SimplePlatform = ({
   position,
   size,
   color = '#1a1a1a',
   safe = false,
   interactive = false,
+  stageId = 1,
 }: {
   position: [number, number, number];
   size: [number, number, number];
   color?: string;
   safe?: boolean;
   interactive?: boolean;
+  stageId?: number;
 }) => {
   const userData: Record<string, any> = {};
   if (safe) {
@@ -114,23 +95,46 @@ const Platform = ({
     userData.type = null;
   }
 
+  // 第二关：深青色发光风格
+  if (stageId === 1) {
+    return (
+      <mesh 
+        position={position} 
+        castShadow 
+        receiveShadow 
+        userData={Object.keys(userData).length ? userData : undefined}
+      >
+        <boxGeometry args={size} />
+        <meshStandardMaterial 
+          color="#e8f0f0ff" 
+          roughness={0.6} 
+          metalness={0.4}
+          emissive="#d7e3e3ff"
+          emissiveIntensity={0.15}
+        />
+      </mesh>
+    );
+  }
+
+  // 第三关：金属灰色风格
   return (
-    <mesh position={position} castShadow receiveShadow userData={Object.keys(userData).length ? userData : undefined}>
+    <mesh 
+      position={position} 
+      castShadow 
+      receiveShadow 
+      userData={Object.keys(userData).length ? userData : undefined}
+    >
       <boxGeometry args={size} />
-      <meshStandardMaterial color={color} roughness={0.85} metalness={0.1} />
+      <meshStandardMaterial 
+        color="#1a1a1a" 
+        roughness={0.2} 
+        metalness={0.9}
+      />
     </mesh>
   );
 };
 
-const LavaPlane: React.FC = () => {
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -3, -20]} receiveShadow userData={{ isLava: true }}>
-      <planeGeometry args={[120, 120, 64, 64]} />
-      <LavaMaterial />
-    </mesh>
-  );
-};
-
+// --- 终点信标 ---
 const GoalBeacon = ({ position }: { position: [number, number, number] }) => (
   <group position={position}>
     <mesh rotation={[Math.PI / 2, 0, 0]}>
@@ -149,57 +153,26 @@ interface StageWorldProps {
   resetToken: number;
 }
 
-const StageOneWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
-  <>
-    <color attach="background" args={['#200505']} />
-    <fog attach="fog" args={['#200505', 5, 40]} />
-    <Environment preset="sunset" />
-    <ambientLight intensity={0.3} />
-    <directionalLight position={[12, 18, 4]} intensity={1.2} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
-    <pointLight position={[0, 6, -10]} intensity={0.8} color="#ff7b39" distance={40} />
-
-    <Platform position={[0, -0.25, 8]} size={[10, 0.5, 10]} safe interactive />
-    <Signboard 
-        position={[0, 5, 2]} 
-        rotation={[0.4, 0, 0]}
-        title="炼金术士试炼"
-        content={[
-            "欢迎来到模拟训练场。",
-            "按 [1] [2] [3] 切换元素枪。",
-            "左键射击以改变物质属性。",
-            "目标：抵达终点信标。",
-            "祝你好运，新兵。"
-        ]}
-    />
-    <LavaPlane />
-    {JELLY_FLOATERS.map((data, index) => (
-      <LabObject
-        key={`jelly-${index}`}
-        position={data.position}
-        size={data.size}
-        resetToken={resetToken}
-        isTargetSurface
-      />
-    ))}
-    {LAVA_COLUMNS.map((data, index) => (
-      <LabObject key={`column-${index}`} position={data.position} size={data.size} resetToken={resetToken} />
-    ))}
-    <GoalBeacon position={[0, 8, -45]} />
-  </>
-);
-
 const StageTwoWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
   <>
     <color attach="background" args={['#001212']} />
     <fog attach="fog" args={['#001212', 6, 45]} />
-    <Environment preset="warehouse" />
+    
+    {/* 
+       Level 2: 幽灵 (Ghost)
+       使用 'night' 预设。
+       添加 Stars 模拟深空/虚空感，配合幽灵枪的科幻感。
+    */}
+    <Environment preset="night" />
+    <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+
     <ambientLight intensity={0.4} />
     <directionalLight position={[8, 16, 6]} intensity={1.0} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
     <pointLight position={[0, 5, -20]} intensity={0.6} color="#7cf4ff" distance={35} />
 
-    <Platform position={[0, -0.25, -2]} size={[8, 0.5, 8]} safe interactive color="#1a1a1a" />
+    <SimplePlatform position={[0, -0.25, -2]} size={[8, 0.5, 8]} safe interactive stageId={1} />
     {GHOST_GATE.map((data, index) => (
-      <LabObject key={`gate-${index}`} position={data.position} size={data.size} resetToken={resetToken} />
+      <LabObject key={`gate-${index}`} position={data.position} size={data.size} resetToken={resetToken} stageId={1} />
     ))}
     {GHOST_GALLERY.map((data, index) => (
       <LabObject
@@ -208,6 +181,7 @@ const StageTwoWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
         size={data.size}
         resetToken={resetToken}
         isTargetSurface
+        stageId={1}
       />
     ))}
     <GoalBeacon position={[0, 2, -44]} />
@@ -217,20 +191,30 @@ const StageTwoWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
 const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
   <>
     <color attach="background" args={['#050510']} />
-    <fog attach="fog" args={['#050510', 10, 60]} />
-    <Environment preset="city" />
+    {/* 减少雾的浓度，让天空盒可见 */}
+    <fog attach="fog" args={['#050510', 20, 90]} />
+    
+    {/* 
+       Level 3: 镜面 (Mirror)
+       这是最重要的部分。
+       1. background: 让环境贴图直接显示为背景。
+       2. blur: 模糊背景，让它看起来像遥远的城市光影，而不是清晰的照片。
+       这会让你的镜面枪反射出非常漂亮的城市霓虹色彩。
+    */}
+    <Environment preset="city" background blur={0.6} />
+    
     <ambientLight intensity={0.2} />
     <directionalLight position={[6, 14, 2]} intensity={0.9} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
     <pointLight position={[0, 8, -25]} intensity={0.7} color="#8bd0ff" distance={35} />
 
-    <Platform position={[0, -0.25, 4]} size={[8, 0.5, 8]} safe interactive color="#050505" />
+    <SimplePlatform position={[0, -0.25, 4]} size={[8, 0.5, 8]} safe interactive stageId={2} />
     {MIRROR_RIBS.map((data, index) => (
       <LabObject 
         key={`rib-${index}`} 
         position={data.position} 
         size={data.size} 
-        rotation={data.rotation || [0, 0, 0]}
-        resetToken={resetToken} 
+        resetToken={resetToken}
+        stageId={2}
       />
     ))}
     {MIRROR_BOOSTERS.map((data, index) => (
@@ -241,6 +225,7 @@ const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => (
         contactBoost={data.contactBoost}
         resetToken={resetToken}
         isTargetSurface
+        stageId={2}
       />
     ))}
     <GoalBeacon position={[0, 34, -46]} />
@@ -254,7 +239,7 @@ interface WorldProps {
 
 export const World: React.FC<WorldProps> = ({ resetToken, stageIndex }) => {
   if (stageIndex === 0) {
-    return <StageOneWorld resetToken={resetToken} />;
+    return <VolcanoWorld resetToken={resetToken} />;
   }
   if (stageIndex === 1) {
     return <StageTwoWorld resetToken={resetToken} />;

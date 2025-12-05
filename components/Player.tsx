@@ -102,7 +102,7 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
           if (canJump.current) {
             if (isOnJelly.current) {
                 // Super Jump on Jelly
-                velocity.current.y = JUMP_FORCE * 2.5;
+                velocity.current.y = JUMP_FORCE * 1.5;
             } else {
                 velocity.current.y = JUMP_FORCE;
             }

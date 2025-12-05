@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { GunType } from '../types';
-import { JellyMaterial, GhostMaterial, MirrorMaterial, GhostWireframeMaterial, LabMaterial } from './Materials';
+import { JellyMaterial, GhostMaterial, MirrorMaterial, GhostWireframeMaterial, ObsidianMaterial } from './Materials';
 
 interface LabObjectProps {
   position: [number, number, number];
@@ -14,6 +14,7 @@ interface LabObjectProps {
   isTargetSurface?: boolean;
   isSafeSurface?: boolean;
   resetToken?: number;
+  stageId?: number; // 新增：关卡ID，用于决定默认材质
 }
 
 // Inner Mesh Component
@@ -24,7 +25,8 @@ const LabObjectMesh = ({
   size = [1.5, 1.5, 1.5], // 默认大小
   contactBoost,
   isTargetSurface,
-  isSafeSurface
+  isSafeSurface,
+  stageId = 0
 }: { 
   type: GunType | null, 
   hitHandler: (t: GunType) => void, 
@@ -32,7 +34,8 @@ const LabObjectMesh = ({
   size?: [number, number, number],
   contactBoost?: [number, number, number],
   isTargetSurface?: boolean,
-  isSafeSurface?: boolean
+  isSafeSurface?: boolean,
+  stageId?: number
 }) => {
     const meshRef = useRef<THREE.Mesh>(null);
 
@@ -69,13 +72,55 @@ const LabObjectMesh = ({
         );
     }
 
+    // 默认状态（type === null）根据关卡使用不同材质
+    if (type === null) {
+      // 第一关：六边形柱体 + 黑曜石材质
+      if (stageId === 0) {
+        const hexRadius = Math.max(size[0], size[2]) * 0.6;
+        const hexHeight = size[1];
+        
+        return (
+          <mesh {...meshProps} rotation={[0, Math.PI / 6, 0]}>
+            <cylinderGeometry args={[hexRadius, hexRadius, hexHeight, 6, 1]} />
+            <ObsidianMaterial />
+          </mesh>
+        );
+      }
+      
+      // 第二关：简单立方体 + 深青色材质
+      if (stageId === 1) {
+        return (
+          <mesh {...meshProps}>
+            <boxGeometry args={[size[0], size[1], size[2]]} />
+            <meshStandardMaterial 
+              color="#accacaff" 
+              roughness={0.7} 
+              metalness={0.3}
+              emissive="#bfd4d4ff"
+              emissiveIntensity={0.1}
+            />
+          </mesh>
+        );
+      }
+      
+      // 第三关：简单立方体 + 深灰金属材质
+      return (
+        <mesh {...meshProps}>
+          <boxGeometry args={[size[0], size[1], size[2]]} />
+          <meshStandardMaterial 
+            color="#2a2a2a" 
+            roughness={0.3} 
+            metalness={0.8}
+          />
+        </mesh>
+      );
+    }
+    
     // 其他类型使用标准 BoxGeometry，应用 size 和 envMap
     return (
       <mesh {...meshProps}>
-        {/* 使用 pgh 的动态尺寸 */}
         <boxGeometry args={[size[0], size[1], size[2], segments, segments, segments]} />
         
-        {type === null && <LabMaterial />}
         {/* 保留 main 的 envMap */}
         {type === GunType.MIRROR && <MirrorMaterial envMap={envMap} />}
         {type === GunType.GHOST && <GhostMaterial />}
@@ -98,6 +143,7 @@ export const LabObject: React.FC<LabObjectProps> = ({
     contactBoost,
     isTargetSurface,
     isSafeSurface,
+    stageId = 0,
     ...props 
 }) => {
   const [type, setType] = useState<GunType | null>(initialType);
@@ -127,6 +173,7 @@ export const LabObject: React.FC<LabObjectProps> = ({
             contactBoost={contactBoost}
             isTargetSurface={isTargetSurface}
             isSafeSurface={isSafeSurface}
+            stageId={stageId}
             {...props} 
          />
     </group>

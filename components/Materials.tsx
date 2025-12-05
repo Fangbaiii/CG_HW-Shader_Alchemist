@@ -338,6 +338,522 @@ export const LavaMaterial = () => {
   return <lavaShaderMaterialImpl ref={materialRef} />;
 };
 
+// --- VOLCANO SKY SHADER ---
+// 程序化火山天空：底部橙红色 -> 中间暗红 -> 顶部灰黑色
+const VolcanoSkyMaterialImpl = shaderMaterial(
+  {
+    uTime: 0,
+  },
+  // Vertex Shader
+  `
+    varying vec3 vWorldPosition;
+    void main() {
+      vec4 worldPos = modelMatrix * vec4(position, 1.0);
+      vWorldPosition = worldPos.xyz;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  // Fragment Shader
+  `
+    varying vec3 vWorldPosition;
+    uniform float uTime;
+    
+    // Simple noise for cloud/smoke effect
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+    }
+    
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      float a = hash(i);
+      float b = hash(i + vec2(1.0, 0.0));
+      float c = hash(i + vec2(0.0, 1.0));
+      float d = hash(i + vec2(1.0, 1.0));
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
+    
+    float fbm(vec2 p) {
+      float f = 0.0;
+      f += 0.5 * noise(p); p *= 2.02;
+      f += 0.25 * noise(p); p *= 2.03;
+      f += 0.125 * noise(p); p *= 2.01;
+      f += 0.0625 * noise(p);
+      return f / 0.9375;
+    }
+    
+    void main() {
+      // Normalize direction
+      vec3 dir = normalize(vWorldPosition);
+      
+      // Height factor (0 at horizon, 1 at top)
+      float height = dir.y * 0.5 + 0.5;
+      
+      // Base sky colors
+      vec3 horizonColor = vec3(0.4, 0.08, 0.02);  // 暗橙红色地平线
+      vec3 midColor = vec3(0.15, 0.03, 0.02);     // 暗红色中间
+      vec3 zenithColor = vec3(0.05, 0.03, 0.03);  // 灰黑色天顶
+      
+      // Mix colors based on height
+      vec3 skyColor;
+      if (height < 0.3) {
+        // Below horizon - glow from lava
+        skyColor = mix(vec3(0.6, 0.15, 0.02), horizonColor, height / 0.3);
+      } else if (height < 0.6) {
+        skyColor = mix(horizonColor, midColor, (height - 0.3) / 0.3);
+      } else {
+        skyColor = mix(midColor, zenithColor, (height - 0.6) / 0.4);
+      }
+      
+      // Add smoke/ash clouds
+      vec2 cloudUV = dir.xz / (dir.y + 0.5) * 2.0;
+      float cloudNoise = fbm(cloudUV + uTime * 0.02);
+      float cloudMask = smoothstep(0.3, 0.7, cloudNoise) * smoothstep(0.2, 0.5, height);
+      
+      vec3 smokeColor = vec3(0.08, 0.06, 0.06);
+      skyColor = mix(skyColor, smokeColor, cloudMask * 0.6);
+      
+      // Add some ember glow near horizon
+      float emberGlow = smoothstep(0.4, 0.25, height) * (0.5 + 0.5 * sin(uTime * 0.5));
+      skyColor += vec3(0.3, 0.05, 0.0) * emberGlow * 0.3;
+      
+      gl_FragColor = vec4(skyColor, 1.0);
+    }
+  `
+);
+
+extend({ VolcanoSkyMaterialImpl });
+
+declare module '@react-three/fiber' {
+  interface ThreeElements {
+    jellyShaderMaterialImpl: any;
+    lavaShaderMaterialImpl: any;
+    volcanoSkyMaterialImpl: any;
+  }
+}
+
+export const VolcanoSkyMaterial = () => {
+  const materialRef = useRef<any>(null);
+  useFrame((state) => {
+    if (materialRef.current) {
+      materialRef.current.uTime = state.clock.elapsedTime;
+    }
+  });
+  return <volcanoSkyMaterialImpl ref={materialRef} side={THREE.BackSide} />;
+};
+
+// --- LAVA FALL SHADER ---
+// 流动的岩浆瀑布效果
+const LavaFallMaterialImpl = shaderMaterial(
+  {
+    uTime: 0,
+  },
+  // Vertex Shader
+  `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  // Fragment Shader
+  `
+    varying vec2 vUv;
+    uniform float uTime;
+    
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+    }
+    
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      float a = hash(i);
+      float b = hash(i + vec2(1.0, 0.0));
+      float c = hash(i + vec2(0.0, 1.0));
+      float d = hash(i + vec2(1.0, 1.0));
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
+    
+    void main() {
+      vec2 uv = vUv;
+      
+      // Flowing downward
+      float flow = uTime * 0.5;
+      
+      // Create flowing lava streams
+      float n1 = noise(vec2(uv.x * 3.0, uv.y * 8.0 - flow));
+      float n2 = noise(vec2(uv.x * 5.0 + 1.0, uv.y * 12.0 - flow * 1.2));
+      
+      float stream = smoothstep(0.3, 0.7, n1) * 0.7 + smoothstep(0.4, 0.6, n2) * 0.3;
+      
+      // Color: dark crust to bright lava
+      vec3 crustColor = vec3(0.1, 0.02, 0.01);
+      vec3 lavaColor = vec3(1.0, 0.4, 0.0);
+      vec3 brightLava = vec3(1.0, 0.8, 0.2);
+      
+      vec3 color = mix(crustColor, lavaColor, stream);
+      color = mix(color, brightLava, smoothstep(0.7, 0.9, stream));
+      
+      // Edge fade
+      float edgeFade = smoothstep(0.0, 0.1, uv.x) * smoothstep(1.0, 0.9, uv.x);
+      
+      gl_FragColor = vec4(color, edgeFade * 0.9);
+    }
+  `
+);
+
+extend({ LavaFallMaterialImpl });
+
+// --- VOLCANO ROCK SHADER ---
+// 火山岩体材质 - 带有发光裂缝效果
+const VolcanoRockMaterialImpl = shaderMaterial(
+  {
+    uTime: 0,
+  },
+  // Vertex Shader
+  `
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    varying vec2 vUv;
+    
+    void main() {
+      vPosition = position;
+      vNormal = normal;
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  // Fragment Shader
+  `
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    varying vec2 vUv;
+    uniform float uTime;
+    
+    // Voronoi for cracks
+    vec2 hash2(vec2 p) {
+      return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453);
+    }
+    
+    float voronoi(vec2 p) {
+      vec2 n = floor(p);
+      vec2 f = fract(p);
+      float md = 1.0;
+      for (int j = -1; j <= 1; j++) {
+        for (int i = -1; i <= 1; i++) {
+          vec2 g = vec2(float(i), float(j));
+          vec2 o = hash2(n + g);
+          vec2 r = g + o - f;
+          float d = dot(r, r);
+          md = min(md, d);
+        }
+      }
+      return md;
+    }
+    
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453);
+      float b = fract(sin(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+      float c = fract(sin(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+      float d = fract(sin(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
+    
+    void main() {
+      // 使用3D位置生成裂缝
+      vec2 crackUV = vPosition.xz * 0.08 + vPosition.y * 0.05;
+      
+      // Voronoi裂缝
+      float v = voronoi(crackUV * 3.0);
+      float crack = smoothstep(0.0, 0.02, v) * smoothstep(0.08, 0.03, v);
+      
+      // 添加一些大裂缝
+      float bigCrack = smoothstep(0.0, 0.01, v) * smoothstep(0.03, 0.015, v);
+      
+      // 高度影响 - 越靠近顶部裂缝越多越亮
+      float heightFactor = smoothstep(-20.0, 20.0, vPosition.y);
+      
+      // 基础岩石颜色
+      float rockNoise = noise(vPosition.xz * 0.2);
+      vec3 rockColor = mix(vec3(0.08, 0.04, 0.03), vec3(0.12, 0.06, 0.04), rockNoise);
+      
+      // 裂缝发光颜色
+      vec3 lavaGlow = vec3(1.0, 0.3, 0.0);
+      vec3 brightGlow = vec3(1.0, 0.7, 0.1);
+      
+      // 脉动效果
+      float pulse = 0.7 + 0.3 * sin(uTime * 1.5 + vPosition.y * 0.5);
+      
+      // 混合裂缝
+      float crackIntensity = (crack * 0.6 + bigCrack * 1.0) * heightFactor * pulse;
+      vec3 crackColor = mix(lavaGlow, brightGlow, bigCrack);
+      
+      vec3 finalColor = mix(rockColor, crackColor, crackIntensity);
+      
+      // 添加边缘光
+      float rimLight = pow(1.0 - max(0.0, dot(vNormal, vec3(0.0, 0.0, 1.0))), 2.0);
+      finalColor += vec3(0.3, 0.05, 0.0) * rimLight * heightFactor * 0.3;
+      
+      gl_FragColor = vec4(finalColor, 1.0);
+    }
+  `
+);
+
+extend({ VolcanoRockMaterialImpl });
+
+// --- LAVA STREAM SHADER ---
+// 岩浆河流材质 - 用于TubeGeometry的流动岩浆
+const LavaStreamMaterialImpl = shaderMaterial(
+  {
+    uTime: 0,
+  },
+  // Vertex Shader
+  `
+    varying vec2 vUv;
+    varying vec3 vPosition;
+    
+    void main() {
+      vUv = uv;
+      vPosition = position;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  // Fragment Shader
+  `
+    varying vec2 vUv;
+    varying vec3 vPosition;
+    uniform float uTime;
+    
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453);
+      float b = fract(sin(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+      float c = fract(sin(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+      float d = fract(sin(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
+    
+    void main() {
+      // 沿着管道流动
+      float flow = uTime * 0.8;
+      vec2 flowUV = vec2(vUv.x * 2.0, vUv.y * 10.0 - flow);
+      
+      // 多层噪声
+      float n1 = noise(flowUV);
+      float n2 = noise(flowUV * 2.0 + 10.0);
+      float n3 = noise(flowUV * 0.5 + 5.0);
+      
+      float lavaPattern = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
+      
+      // 颜色渐变
+      vec3 darkLava = vec3(0.15, 0.02, 0.0);
+      vec3 hotLava = vec3(1.0, 0.4, 0.0);
+      vec3 brightLava = vec3(1.0, 0.9, 0.3);
+      
+      vec3 color = mix(darkLava, hotLava, smoothstep(0.3, 0.6, lavaPattern));
+      color = mix(color, brightLava, smoothstep(0.7, 0.9, lavaPattern));
+      
+      // 边缘冷却效果
+      float edge = smoothstep(0.0, 0.3, vUv.x) * smoothstep(1.0, 0.7, vUv.x);
+      color = mix(vec3(0.05, 0.02, 0.01), color, edge);
+      
+      // 发光强度
+      float glow = smoothstep(0.4, 0.8, lavaPattern) * edge;
+      
+      gl_FragColor = vec4(color, 0.95);
+    }
+  `
+);
+
+extend({ LavaStreamMaterialImpl });
+
+declare module '@react-three/fiber' {
+  interface ThreeElements {
+    jellyShaderMaterialImpl: any;
+    lavaShaderMaterialImpl: any;
+    volcanoSkyMaterialImpl: any;
+    lavaFallMaterialImpl: any;
+    volcanoRockMaterialImpl: any;
+    lavaStreamMaterialImpl: any;
+  }
+}
+
+export const LavaFallMaterial = () => {
+  const materialRef = useRef<any>(null);
+  useFrame((state) => {
+    if (materialRef.current) {
+      materialRef.current.uTime = state.clock.elapsedTime;
+    }
+  });
+  return <lavaFallMaterialImpl ref={materialRef} transparent side={THREE.DoubleSide} />;
+};
+
+export const VolcanoRockMaterial = () => {
+  const materialRef = useRef<any>(null);
+  useFrame((state) => {
+    if (materialRef.current) {
+      materialRef.current.uTime = state.clock.elapsedTime;
+    }
+  });
+  return <volcanoRockMaterialImpl ref={materialRef} />;
+};
+
+// --- LOW POLY VOLCANO ROCK MATERIAL ---
+// 使用 flatShading 产生 Low Poly 玄武岩效果
+export const LowPolyVolcanoRockMaterial = () => (
+  <meshStandardMaterial 
+    color="#1a1a1a" 
+    roughness={0.9} 
+    metalness={0.2}
+    flatShading={true}
+  />
+);
+
+export const LavaStreamMaterial = () => {
+  const materialRef = useRef<any>(null);
+  useFrame((state) => {
+    if (materialRef.current) {
+      materialRef.current.uTime = state.clock.elapsedTime;
+    }
+  });
+  return <lavaStreamMaterialImpl ref={materialRef} transparent />;
+};
+
+// --- OBSIDIAN MATERIAL ---
+// 黑曜石材质 - 深黑色带发光裂纹效果
+const ObsidianMaterialImpl = shaderMaterial(
+  {
+    uTime: 0,
+  },
+  // Vertex Shader
+  `
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    varying vec2 vUv;
+    
+    void main() {
+      vPosition = position;
+      vNormal = normalize(normalMatrix * normal);
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  // Fragment Shader
+  `
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    varying vec2 vUv;
+    uniform float uTime;
+    
+    // Voronoi for cracks
+    vec2 hash2(vec2 p) {
+      return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453);
+    }
+    
+    float voronoi(vec2 p) {
+      vec2 n = floor(p);
+      vec2 f = fract(p);
+      float md = 1.0;
+      float md2 = 1.0;
+      for (int j = -1; j <= 1; j++) {
+        for (int i = -1; i <= 1; i++) {
+          vec2 g = vec2(float(i), float(j));
+          vec2 o = hash2(n + g);
+          vec2 r = g + o - f;
+          float d = dot(r, r);
+          if (d < md) {
+            md2 = md;
+            md = d;
+          } else if (d < md2) {
+            md2 = d;
+          }
+        }
+      }
+      return md2 - md; // Edge detection
+    }
+    
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453);
+      float b = fract(sin(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+      float c = fract(sin(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+      float d = fract(sin(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
+    
+    void main() {
+      // 使用3D位置生成裂缝
+      vec2 crackUV = vPosition.xz * 0.5 + vPosition.y * 0.3;
+      
+      // Voronoi裂缝边缘
+      float crack = voronoi(crackUV * 2.0);
+      float crackLine = smoothstep(0.0, 0.03, crack) * smoothstep(0.08, 0.02, crack);
+      
+      // 基础黑曜石颜色 - 深黑色带微妙变化
+      float rockNoise = noise(vPosition.xz * 0.8 + vPosition.y * 0.5);
+      vec3 baseColor = mix(vec3(0.02, 0.02, 0.03), vec3(0.06, 0.05, 0.07), rockNoise);
+      
+      // 添加微弱的紫色/蓝色光泽（黑曜石特有）
+      float sheen = pow(max(0.0, dot(vNormal, normalize(vec3(1.0, 1.0, 0.5)))), 8.0);
+      baseColor += vec3(0.05, 0.02, 0.08) * sheen;
+      
+      // 裂缝发光颜色 - 暗橙/红色岩浆光
+      vec3 crackGlow = vec3(0.8, 0.2, 0.05);
+      
+      // 微弱的脉动效果
+      float pulse = 0.6 + 0.4 * sin(uTime * 0.8 + vPosition.x * 0.5 + vPosition.z * 0.5);
+      
+      // 混合裂缝
+      vec3 finalColor = mix(baseColor, crackGlow, crackLine * pulse * 0.7);
+      
+      // 简单光照
+      vec3 lightDir = normalize(vec3(0.5, 1.0, 0.3));
+      float diff = max(0.0, dot(vNormal, lightDir)) * 0.5 + 0.5;
+      finalColor *= diff;
+      
+      // 边缘高光
+      float rimLight = pow(1.0 - max(0.0, dot(vNormal, vec3(0.0, 1.0, 0.0))), 3.0);
+      finalColor += vec3(0.15, 0.05, 0.02) * rimLight * 0.3;
+      
+      gl_FragColor = vec4(finalColor, 1.0);
+    }
+  `
+);
+
+extend({ ObsidianMaterialImpl });
+
+declare module '@react-three/fiber' {
+  interface ThreeElements {
+    jellyShaderMaterialImpl: any;
+    lavaShaderMaterialImpl: any;
+    volcanoSkyMaterialImpl: any;
+    lavaFallMaterialImpl: any;
+    volcanoRockMaterialImpl: any;
+    lavaStreamMaterialImpl: any;
+    obsidianMaterialImpl: any;
+  }
+}
+
+export const ObsidianMaterial = () => {
+  const materialRef = useRef<any>(null);
+  useFrame((state) => {
+    if (materialRef.current) {
+      materialRef.current.uTime = state.clock.elapsedTime;
+    }
+  });
+  return <obsidianMaterialImpl ref={materialRef} />;
+};
+
 // --- DEFAULT LAB MATERIAL ---
 export const LabMaterial = () => (
     <meshStandardMaterial color="#dddddd" roughness={0.8} metalness={0.2} />

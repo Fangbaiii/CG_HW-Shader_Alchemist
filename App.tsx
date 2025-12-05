@@ -16,7 +16,7 @@ const STAGES = [
     title: 'Molten Hopscotch',
     detail: 'Transmutate floating ruins into jelly trampolines and cross the magma void.',
     spawn: new THREE.Vector3(0, 1.7, 8),
-    goalZ: -44,
+    goalZ: -68,
   },
   {
     code: '02',
