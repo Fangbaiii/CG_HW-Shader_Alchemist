@@ -286,19 +286,36 @@ export default function App() {
       )}
 
       {transitionInfo && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="bg-black/60 border border-cyan-400/40 px-8 py-6 rounded-lg text-center font-mono text-white shadow-[0_0_30px_rgba(0,255,255,0.25)] animate-pulse">
-            <div className="text-cyan-300 tracking-[0.4em] text-xs">
-              {transitionInfo.type === 'final' ? 'SIMULATION COMPLETE' : 'STAGE COMPLETE'}
-            </div>
-            <div className="text-lg font-semibold mt-2">
-              {transitionInfo.type === 'final' ? '恭喜夺冠！' : STAGES[transitionInfo.from].title}
-            </div>
-            <div className="text-[11px] text-gray-300 mt-2">
-              {transitionInfo.type === 'final' 
-                ? '所有试炼已通过。你已成为一名合格的炼金术士。' 
-                : `Routing neural link to ${STAGES[transitionInfo.to].code} · ${STAGES[transitionInfo.to].title}`
-              }
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[100]">
+          <div className="relative overflow-hidden bg-black/80 border-y-2 border-cyan-400/60 px-16 py-12 text-center font-mono text-white shadow-[0_0_50px_rgba(0,255,255,0.3)] backdrop-blur-md animate-in fade-in zoom-in duration-500">
+            
+            {/* Background Glitch Effect */}
+            <div className="absolute inset-0 opacity-10 bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,#00ffff_10px,#00ffff_11px)]"></div>
+            
+            {/* Main Title */}
+            <div className="relative z-10">
+                <div className="text-cyan-300 tracking-[0.5em] text-sm mb-4 animate-pulse">
+                {transitionInfo.type === 'final' ? 'SYSTEM: SIMULATION_END' : 'SYSTEM: CHECKPOINT_REACHED'}
+                </div>
+                
+                <div className="text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-white to-cyan-200 drop-shadow-[0_0_10px_rgba(0,255,255,0.8)]">
+                {transitionInfo.type === 'final' ? '试炼完成' : '关卡通过'}
+                </div>
+                
+                <div className="w-full h-px bg-gradient-to-r from-transparent via-cyan-500 to-transparent my-4 opacity-50"></div>
+
+                <div className="text-lg text-cyan-100 font-light tracking-widest">
+                {transitionInfo.type === 'final' 
+                    ? '恭喜！你已掌握所有炼金术式。' 
+                    : `正在建立神经链接... 目标：${STAGES[transitionInfo.to].code} 区`
+                }
+                </div>
+                
+                {transitionInfo.type !== 'final' && (
+                    <div className="mt-6 text-xs text-gray-400 animate-bounce">
+                        加载下一区域数据...
+                    </div>
+                )}
             </div>
           </div>
         </div>

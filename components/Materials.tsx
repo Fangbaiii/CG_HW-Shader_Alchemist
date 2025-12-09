@@ -1029,6 +1029,83 @@ export const PlanetBlockMaterial = () => {
   return <planetBlockShaderMaterialImpl ref={materialRef} />;
 };
 
+// --- 6. CYBER GRID MATERIAL (Level 3) ---
+// A retro-futuristic neon grid shader for the "Cyber City" theme
+const CyberGridShaderMaterialImpl = shaderMaterial(
+  {
+    uTime: 0,
+    uColor: new THREE.Color('#00ffff'), // Cyan grid
+    uBaseColor: new THREE.Color('#050510'), // Dark background
+  },
+  // Vertex Shader
+  `
+    varying vec2 vUv;
+    varying vec3 vPos;
+    void main() {
+      vUv = uv;
+      vPos = position;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  // Fragment Shader
+  `
+    varying vec2 vUv;
+    varying vec3 vPos;
+    uniform float uTime;
+    uniform vec3 uColor;
+    uniform vec3 uBaseColor;
+
+    void main() {
+      // Create a grid pattern
+      float gridSize = 10.0; // Density
+      
+      // Moving grid effect
+      float move = uTime * 0.2;
+      
+      // Calculate grid lines
+      // Use absolute position for world-aligned grid feel, or UV for object-aligned
+      // Here we use UV for simplicity on cubes
+      float x = fract(vUv.x * gridSize + move);
+      float y = fract(vUv.y * gridSize);
+      
+      float lineThickness = 0.05;
+      float gridX = step(1.0 - lineThickness, x);
+      float gridY = step(1.0 - lineThickness, y);
+      
+      float grid = max(gridX, gridY);
+      
+      // Pulse effect
+      float pulse = 0.5 + 0.5 * sin(uTime * 2.0 + vPos.y * 5.0);
+      
+      vec3 finalColor = mix(uBaseColor, uColor, grid * pulse);
+      
+      // Add a subtle glow at the bottom
+      float glow = 1.0 - vUv.y;
+      finalColor += uColor * glow * 0.2;
+
+      gl_FragColor = vec4(finalColor, 1.0);
+    }
+  `
+);
+
+extend({ CyberGridShaderMaterialImpl });
+
+declare module '@react-three/fiber' {
+  interface ThreeElements {
+    cyberGridShaderMaterialImpl: any;
+  }
+}
+
+export const CyberGridMaterial = () => {
+  const materialRef = useRef<any>(null);
+  useFrame((state) => {
+    if (materialRef.current) {
+      materialRef.current.uTime = state.clock.elapsedTime;
+    }
+  });
+  return <cyberGridShaderMaterialImpl ref={materialRef} />;
+};
+
 // --- DEFAULT LAB MATERIAL ---
 export const LabMaterial = () => (
     <meshStandardMaterial color="#dddddd" roughness={0.8} metalness={0.2} />

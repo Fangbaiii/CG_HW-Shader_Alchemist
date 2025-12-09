@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { GunType } from '../types';
-import { JellyMaterial, GhostMaterial, MirrorMaterial, GhostWireframeMaterial, ObsidianMaterial, PlanetBlockMaterial } from './Materials';
+import { JellyMaterial, GhostMaterial, MirrorMaterial, GhostWireframeMaterial, ObsidianMaterial, PlanetBlockMaterial, CyberGridMaterial } from './Materials';
 
 interface LabObjectProps {
   position: [number, number, number];
@@ -14,7 +14,8 @@ interface LabObjectProps {
   isTargetSurface?: boolean;
   isSafeSurface?: boolean;
   resetToken?: number;
-  stageId?: number; // 新增：关卡ID，用于决定默认材质
+  stageId?: number;
+  onTypeChange?: (type: GunType) => void;
 }
 
 // Inner Mesh Component
@@ -94,7 +95,17 @@ const LabObjectMesh = ({
         );
       }
       
-      // 第三关：简单立方体 + 深灰金属材质
+      // 第三关：赛博网格材质
+      if (stageId === 2) {
+        return (
+          <mesh {...meshProps}>
+            <boxGeometry args={[size[0], size[1], size[2]]} />
+            <CyberGridMaterial />
+          </mesh>
+        );
+      }
+
+      // 默认：简单立方体 + 深灰金属材质
       return (
         <mesh {...meshProps}>
           <boxGeometry args={[size[0], size[1], size[2]]} />
@@ -135,6 +146,7 @@ export const LabObject: React.FC<LabObjectProps> = ({
     isTargetSurface,
     isSafeSurface,
     stageId = 0,
+    onTypeChange,
     ...props 
 }) => {
   const [type, setType] = useState<GunType | null>(initialType);
@@ -145,6 +157,9 @@ export const LabObject: React.FC<LabObjectProps> = ({
 
   const hit = (gunType: GunType) => {
     setType(gunType);
+    if (onTypeChange) {
+        onTypeChange(gunType);
+    }
   };
 
   return (

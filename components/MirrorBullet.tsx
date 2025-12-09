@@ -14,6 +14,7 @@ export const MirrorBullet: React.FC<MirrorBulletProps> = ({ position, direction,
   const speed = 50; // Fast and sharp
   const { scene } = useThree();
   const initialPos = useRef(position.clone());
+  const raycaster = useRef(new THREE.Raycaster());
 
   useFrame((state, delta) => {
     if (!ref.current) return;
@@ -30,11 +31,15 @@ export const MirrorBullet: React.FC<MirrorBulletProps> = ({ position, direction,
 
     // Collision Detection
     const rayDirection = direction.clone().normalize();
-    const raycaster = new THREE.Raycaster(ref.current.position, rayDirection, 0, moveDistance + 0.1);
-    const intersects = raycaster.intersectObjects(scene.children, true);
+    raycaster.current.set(ref.current.position, rayDirection);
+    raycaster.current.far = moveDistance + 0.1;
+    
+    const intersects = raycaster.current.intersectObjects(scene.children, true);
     
     const hit = intersects.find(i => {
         if (i.object === ref.current) return false;
+        // Ignore Lines and other non-mesh objects to prevent lag
+        if (i.object.type === 'Line' || i.object.type === 'LineSegments') return false;
         return i.object.type === 'Mesh';
     });
 
@@ -42,12 +47,14 @@ export const MirrorBullet: React.FC<MirrorBulletProps> = ({ position, direction,
         // Trigger interaction immediately without explosion visual
         // Traverse up to find the interactive parent
         let target: THREE.Object3D | null = hit.object;
-        while (target) {
+        let loopCount = 0;
+        while (target && loopCount < 20) { // Safety break
             if (target.userData && target.userData.isInteractive && target.userData.hitHandler) {
                 target.userData.hitHandler(GunType.MIRROR);
                 break;
             }
             target = target.parent;
+            loopCount++;
         }
         
         onHit(); // Disappear immediately
