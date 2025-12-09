@@ -2,6 +2,37 @@ import React, { useRef, useMemo, useLayoutEffect } from 'react';
 import { Environment, Stars } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { LabObject } from './LabObject';
+import { GunType } from '../types';
+
+type LabDefinition = {
+  position: [number, number, number];
+  size?: [number, number, number];
+  rotation?: [number, number, number];
+  contactBoost?: [number, number, number];
+  initialType?: GunType | null;
+  isTargetSurface?: boolean;
+  isSafeSurface?: boolean;
+};
+
+const GHOST_LEVEL_OBJECTS: LabDefinition[] = [
+  // 1. First Gate - Blocks the start
+  { position: [0, 1.5, -6], size: [8, 4, 0.5] },
+  
+  // 2. Platform after gate
+  { position: [0, -0.5, -10], size: [4, 0.5, 4], isSafeSurface: true, isTargetSurface: true },
+
+  // 3. Jump Sequence
+  { position: [-3, 0.5, -16], size: [3, 0.5, 3], isSafeSurface: true, isTargetSurface: true },
+  { position: [3, 1.5, -22], size: [3, 0.5, 3], isSafeSurface: true, isTargetSurface: true },
+  { position: [0, 2.0, -28], size: [4, 0.5, 4], isSafeSurface: true, isTargetSurface: true },
+
+  // 4. Final Barrier - Large wall blocking the goal
+  { position: [0, 5.0, -35], size: [12, 10, 1] },
+
+  // 5. Goal Platform
+  { position: [0, 1.5, -44], size: [6, 0.5, 6], isSafeSurface: true, isTargetSurface: true },
+];
 
 // --- 裂缝数据定义 ---
 // 定义星球表面的主要裂缝位置和参数
@@ -1073,6 +1104,22 @@ export const GhostWorld: React.FC<GhostWorldProps> = ({ resetToken }) => (
 
     {/* 起始平台 - 星球风格 */}
     <StartingPlatform />
+
+    {/* 关卡物体 - 幽灵墙和平台 */}
+    {GHOST_LEVEL_OBJECTS.map((data, index) => (
+      <LabObject
+        key={`ghost-obj-${index}`}
+        position={data.position}
+        size={data.size}
+        rotation={data.rotation}
+        contactBoost={data.contactBoost}
+        initialType={data.initialType}
+        isTargetSurface={data.isTargetSurface}
+        isSafeSurface={data.isSafeSurface}
+        resetToken={resetToken}
+        stageId={1}
+      />
+    ))}
     
     {/* 废墟山脉 - 远景 */}
     <MountainRange />

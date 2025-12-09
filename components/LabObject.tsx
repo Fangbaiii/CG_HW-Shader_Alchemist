@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { GunType } from '../types';
-import { JellyMaterial, GhostMaterial, MirrorMaterial, GhostWireframeMaterial, ObsidianMaterial } from './Materials';
+import { JellyMaterial, GhostMaterial, MirrorMaterial, GhostWireframeMaterial, ObsidianMaterial, PlanetBlockMaterial } from './Materials';
 
 interface LabObjectProps {
   position: [number, number, number];
@@ -84,18 +84,12 @@ const LabObjectMesh = ({
         );
       }
       
-      // 第二关：简单立方体 + 深青色材质
+      // 第二关：星球方块材质
       if (stageId === 1) {
         return (
           <mesh {...meshProps}>
             <boxGeometry args={[size[0], size[1], size[2]]} />
-            <meshStandardMaterial 
-              color="#accacaff" 
-              roughness={0.7} 
-              metalness={0.3}
-              emissive="#bfd4d4ff"
-              emissiveIntensity={0.1}
-            />
+            <PlanetBlockMaterial />
           </mesh>
         );
       }
