@@ -16,7 +16,7 @@ export const GUN_CONFIGS: Record<GunType, GunConfig> = {
   [GunType.JELLY]: {
     type: GunType.JELLY,
     name: "Bio-Slime Injector",
-    color: "#39FF14",
+    color: "#28b30fff",
     emissive: "#00FF00",
     description: "Makes objects bouncy and fluid."
   },

@@ -20,7 +20,6 @@ export const Signboard: React.FC<SignboardProps> = ({ position, rotation = [0, 0
       {/* HTML Content */}
       <Html 
         transform 
-        occlude 
         position={[0, 0, 0.06]} 
         style={{ 
             width: '300px', 

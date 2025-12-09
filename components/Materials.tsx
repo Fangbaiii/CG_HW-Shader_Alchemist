@@ -7,7 +7,7 @@ import * as THREE from 'three';
 const JellyShaderMaterialImpl = shaderMaterial(
   { 
     uTime: 0, 
-    uColor: new THREE.Color('#39FF14') 
+    uColor: new THREE.Color('#26b809ff') 
   },
   // Vertex Shader
   `
@@ -173,7 +173,7 @@ declare module '@react-three/fiber' {
 
 // --- 1. JELLY MATERIAL ---
 // Uses custom shader to simulate wobbling fluid
-export const JellyMaterial = ({ color = "#39FF14", side = THREE.FrontSide }: { color?: string, side?: THREE.Side }) => {
+export const JellyMaterial = ({ color = "#33d017ff", side = THREE.FrontSide }: { color?: string, side?: THREE.Side }) => {
   const materialRef = useRef<any>(null);
   
   useFrame((state) => {

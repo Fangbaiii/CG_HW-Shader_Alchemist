@@ -63,7 +63,7 @@ const LabObjectMesh = ({
         return (
             <group>
                 <RoundedBox args={size} radius={0.2} smoothness={8} renderOrder={1}>
-                     <JellyMaterial color="#39FF14" side={THREE.BackSide} />
+                     <JellyMaterial color="#24b60aff" side={THREE.BackSide} />
                 </RoundedBox>
                 <RoundedBox args={size} radius={0.2} smoothness={8} {...meshProps} renderOrder={2}>
                      <JellyMaterial color="#39FF14" side={THREE.FrontSide} />
@@ -74,15 +74,12 @@ const LabObjectMesh = ({
 
     // 默认状态（type === null）根据关卡使用不同材质
     if (type === null) {
-      // 第一关：六边形柱体 + 黑曜石材质
+      // 第一关：立方体 + 黑曜石材质
       if (stageId === 0) {
-        const hexRadius = Math.max(size[0], size[2]) * 0.6;
-        const hexHeight = size[1];
-        
         return (
-          <mesh {...meshProps} rotation={[0, Math.PI / 6, 0]}>
-            <cylinderGeometry args={[hexRadius, hexRadius, hexHeight, 6, 1]} />
-            <ObsidianMaterial />
+          <mesh {...meshProps}>
+        <boxGeometry args={[size[0], size[1], size[2]]} />
+        <ObsidianMaterial />
           </mesh>
         );
       }
