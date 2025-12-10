@@ -294,7 +294,7 @@ export const VolcanoWorld: React.FC<VolcanoWorldProps> = ({ resetToken }) => (
     <VolcanoSky />
     
     {/* 保留 sunset 环境光用于物体反射 */}
-    <Environment preset="sunset" />
+    {/* <Environment preset="sunset" /> */}
     
     {/* 增强的粒子效果 - 漂浮灰烬和火星 */}
     <Sparkles 

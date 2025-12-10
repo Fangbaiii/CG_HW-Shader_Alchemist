@@ -459,7 +459,7 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
           {/* Lighting for the gun model */}
           <ambientLight intensity={0.8} />
           <pointLight position={[2, 2, 5]} intensity={1.5} />
-          <Environment preset="city" />
+          {/* <Environment preset="city" /> */}
           
           {/* The Gun */}
           <GunModel currentGun={currentGun} isShooting={isShooting} />

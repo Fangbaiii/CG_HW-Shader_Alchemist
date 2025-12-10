@@ -7,6 +7,7 @@ import { VolcanoWorld } from './VolcanoWorld';
 import { GhostWorld } from './GhostWorld';
 import { LaserPuzzle } from './LaserPuzzle';
 import { GunType } from '../types';
+import { CyberGridMaterial } from './Materials';
 
 type LabDefinition = {
   position: [number, number, number];
@@ -51,8 +52,6 @@ const FINAL_TOWER_PLATFORMS: LabDefinition[] = [
     { position: [0, 10, -40], size: [4, 0.5, 4], isSafeSurface: true, isTargetSurface: true },
     { position: [0, 15, -46], size: [4, 0.5, 4], isSafeSurface: true, isTargetSurface: true },
 ];
-
-import { CyberGridMaterial } from './Materials';
 
 // 第三关的平台组件 - 简单立方体
 const SimplePlatform = ({
@@ -101,30 +100,35 @@ const GoalBeacon = ({ position }: { position: [number, number, number] }) => (
   </group>
 );
 
-const CyberBackground = () => {
+const CyberBackground = React.memo(() => {
+  const buildings = useMemo(() => {
+    return Array.from({ length: 40 }).map((_, i) => {
+        const angle = (i / 40) * Math.PI * 2;
+        const radius = 40 + Math.random() * 20;
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        const h = 10 + Math.random() * 40;
+        const emissiveColor = Math.random() > 0.5 ? "#ff00ff" : "#00ffff";
+        return { x, z, h, emissiveColor };
+    });
+  }, []);
+
   return (
     <group>
       <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
       <Sparkles count={300} scale={[100, 50, 100]} size={6} speed={0.4} opacity={0.5} color="#00ffff" />
       
       {/* Distant Cityscape - Procedural Buildings */}
-      {Array.from({ length: 40 }).map((_, i) => {
-        const angle = (i / 40) * Math.PI * 2;
-        const radius = 40 + Math.random() * 20;
-        const x = Math.cos(angle) * radius;
-        const z = Math.sin(angle) * radius;
-        const h = 10 + Math.random() * 40;
-        return (
-          <mesh key={i} position={[x, h/2 - 20, z]}>
-            <boxGeometry args={[3, h, 3]} />
+      {buildings.map((b, i) => (
+          <mesh key={i} position={[b.x, b.h/2 - 20, b.z]}>
+            <boxGeometry args={[3, b.h, 3]} />
             <meshStandardMaterial 
                 color="#000000" 
-                emissive={Math.random() > 0.5 ? "#ff00ff" : "#00ffff"} 
+                emissive={b.emissiveColor} 
                 emissiveIntensity={0.5} 
             />
           </mesh>
-        );
-      })}
+      ))}
       
       {/* Floating Rings */}
       <Float speed={2} rotationIntensity={0.5} floatIntensity={1}>
@@ -135,7 +139,7 @@ const CyberBackground = () => {
       </Float>
     </group>
   );
-};
+});
 
 interface StageWorldProps {
   resetToken: number;
@@ -208,7 +212,7 @@ const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => {
       }
   });
 
-  const handleNodeHit = (index: number, type: GunType) => {
+  const handleNodeHit = React.useCallback((index: number, type: GunType) => {
       if (type === GunType.MIRROR) {
           setNodeStates(prev => {
               const next = [...prev];
@@ -216,7 +220,11 @@ const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => {
               return next;
           });
       }
-  };
+  }, []);
+
+  const onNode1Hit = React.useCallback((t: GunType) => handleNodeHit(0, t), [handleNodeHit]);
+  const onNode2Hit = React.useCallback((t: GunType) => handleNodeHit(1, t), [handleNodeHit]);
+  const onNode3Hit = React.useCallback((t: GunType) => handleNodeHit(2, t), [handleNodeHit]);
 
   return (
   <>
@@ -224,7 +232,7 @@ const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => {
     <fog attach="fog" args={['#000205', 30, 90]} />
     
     {/* Rich Cyber Atmosphere */}
-    <Environment preset="sunset" background blur={0.5} />
+    {/* <Environment preset="sunset" background blur={0.5} /> */}
     <CyberBackground />
     
     <ambientLight intensity={0.5} color="#00ffff" />
@@ -253,7 +261,7 @@ const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => {
         size={[2, 2, 2]} 
         resetToken={resetToken} 
         stageId={2}
-        onTypeChange={(t) => handleNodeHit(0, t)}
+        onTypeChange={onNode1Hit}
     />
     {/* Node 2 */}
     <LabObject 
@@ -261,7 +269,7 @@ const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => {
         size={[2, 2, 2]} 
         resetToken={resetToken} 
         stageId={2}
-        onTypeChange={(t) => handleNodeHit(1, t)}
+        onTypeChange={onNode2Hit}
     />
     {/* Node 3 */}
     <LabObject 
@@ -269,7 +277,7 @@ const StageThreeWorld: React.FC<StageWorldProps> = ({ resetToken }) => {
         size={[2, 2, 2]} 
         resetToken={resetToken} 
         stageId={2}
-        onTypeChange={(t) => handleNodeHit(2, t)}
+        onTypeChange={onNode3Hit}
     />
 
     {/* Receiver */}

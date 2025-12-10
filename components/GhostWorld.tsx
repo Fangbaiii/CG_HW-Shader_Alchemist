@@ -1071,7 +1071,7 @@ export const GhostWorld: React.FC<GhostWorldProps> = ({ resetToken }) => (
     <color attach="background" args={['#0a0910']} />
     <fog attach="fog" args={['#151215', 50, 150]} />
     
-    <Environment preset="night" />
+    {/* <Environment preset="night" /> */}
     <Stars radius={150} depth={80} count={4000} factor={5} saturation={0.2} fade speed={0.3} />
 
     {/* 绚丽星云背景 - 在星空中增添瑰丽色彩 */}
