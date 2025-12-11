@@ -1,5 +1,5 @@
 import React from 'react';
-import { Html } from '@react-three/drei';
+import { Text, RoundedBox } from '@react-three/drei';
 
 interface SignboardProps {
   position: [number, number, number];
@@ -9,42 +9,47 @@ interface SignboardProps {
 }
 
 export const Signboard: React.FC<SignboardProps> = ({ position, rotation = [0, 0, 0], title, content }) => {
+  // Use default font to avoid loading issues
+  // const fontUrl = 'https://fonts.gstatic.com/s/notosanssc/v26/k3kXo84MPvpLmixcA63OEALhLOCT-xWtmwxH2l2Q.woff';
+
   return (
     <group position={position} rotation={rotation}>
-      {/* The Board (Visual backing) */}
-      <mesh position={[0, 0, 0]}>
-        <boxGeometry args={[3, 2, 0.1]} />
-        <meshStandardMaterial color="#1a1a1a" transparent opacity={0.8} />
-      </mesh>
+      {/* 背景板 - 带圆角的半透明黑曜石板 */}
+      <RoundedBox args={[3, 2, 0.1]} radius={0.1} smoothness={4}>
+        <meshStandardMaterial color="#1a1a1a" transparent opacity={0.8} roughness={0.2} metalness={0.8} />
+      </RoundedBox>
 
-      {/* HTML Content */}
-      <Html 
-        transform 
-        position={[0, 0, 0.06]} 
-        style={{ 
-            width: '300px', 
-            height: '200px', 
-            backgroundColor: 'rgba(0, 0, 0, 0.8)', 
-            padding: '20px',
-            borderRadius: '10px',
-            border: '2px solid #00ffff',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontFamily: 'monospace',
-            userSelect: 'none',
-            pointerEvents: 'none'
-        }}
+      {/* 边框 - 背后稍微大一圈的青色板 */}
+      <RoundedBox args={[3.06, 2.06, 0.08]} radius={0.12} smoothness={4} position={[0, 0, -0.02]}>
+        <meshBasicMaterial color="#00ffff" />
+      </RoundedBox>
+
+      {/* 标题 */}
+      <Text
+        position={[0, 0.6, 0.06]}
+        fontSize={0.25}
+        color="#00ffff"
+        anchorX="center"
+        anchorY="middle"
+        outlineWidth={0.005} // 轻微描边增加可读性
+        outlineColor="#004444"
       >
-        <h1 style={{ color: '#00ffff', fontSize: '24px', marginBottom: '10px', fontWeight: 'bold', textAlign: 'center' }}>{title}</h1>
-        <div style={{ fontSize: '14px', lineHeight: '1.6', color: '#ccc' }}>
-            {content.map((line, i) => (
-                <div key={i}>{line}</div>
-            ))}
-        </div>
-      </Html>
+        {title}
+      </Text>
+
+      {/* 内容文本 */}
+      <Text
+        position={[0, -0.15, 0.06]}
+        fontSize={0.14}
+        color="#cccccc"
+        anchorX="center"
+        anchorY="middle"
+        maxWidth={2.6}
+        lineHeight={1.6}
+        textAlign="left" // 内容左对齐看起来更像列表
+      >
+        {content.join('\n')}
+      </Text>
     </group>
   );
 };

@@ -60,11 +60,11 @@ const Platform = ({
   const hexHeight = size[1];
 
   return (
-    <mesh 
-      position={position} 
+    <mesh
+      position={position}
       rotation={[0, Math.PI / 6, 0]}
-      castShadow 
-      receiveShadow 
+      castShadow
+      receiveShadow
       userData={Object.keys(userData).length ? userData : undefined}
     >
       <cylinderGeometry args={[hexRadius, hexRadius, hexHeight, 6, 1]} />
@@ -95,30 +95,30 @@ const VolcanoSky: React.FC = () => {
 
 // --- 活火山 (Low Poly 风格) ---
 // 使用 LatheGeometry 创建连续曲线山体，配合顶点随机偏移产生岩石质感
-const ActiveVolcano = ({ 
-  position, 
+const ActiveVolcano = ({
+  position,
   scale = 1,
   rotation = 0,
-}: { 
+}: {
   position: [number, number, number];
   scale?: number;
   rotation?: number;
 }) => {
   const meshRef = useRef<THREE.Mesh>(null);
-  
+
   // 火山形状参数
   const volcanoHeight = 20;
   const topRadius = 3;      // 平顶的半径
   const bottomRadius = 25;  // 底部的半径
   const segments = 10;      // 垂直分段数
-  
+
   // 核心公式：根据高度计算半径（指数曲线，下缓上陡）
   const getRadiusAtHeight = (y: number) => {
     const t = Math.max(0, Math.min(1, y / volcanoHeight)); // 归一化高度 0-1
     // Math.pow(1-t, 2.5) 产生内凹曲线效果
     return topRadius + (bottomRadius - topRadius) * Math.pow(1 - t, 2.5);
   };
-  
+
   // 1. 生成火山的主体轮廓点 (用于 LatheGeometry)
   const lathePoints = useMemo(() => {
     const points: THREE.Vector2[] = [];
@@ -130,7 +130,7 @@ const ActiveVolcano = ({
     }
     return points;
   }, []);
-  
+
   // 2. 对几何体顶点添加随机偏移，增加岩石崎岖感
   useLayoutEffect(() => {
     if (meshRef.current) {
@@ -141,26 +141,26 @@ const ActiveVolcano = ({
 
       for (let i = 0; i < posAttribute.count; i++) {
         vertex.fromBufferAttribute(posAttribute, i);
-        
+
         // 排除顶部和底部边缘的顶点，保持边缘相对整齐
         if (vertex.y > 0.5 && vertex.y < volcanoHeight - 0.5) {
           // 给 x 和 z 轴增加随机偏移，模拟岩石的不规则
           vertex.x += (Math.random() - 0.5) * randomness;
           vertex.z += (Math.random() - 0.5) * randomness;
         }
-        
+
         posAttribute.setXYZ(i, vertex.x, vertex.y, vertex.z);
       }
       geometry.computeVertexNormals(); // 重新计算法线以适配 flatShading
       posAttribute.needsUpdate = true;
     }
   }, [lathePoints]);
-  
+
   // 3. 生成贴合表面的岩浆流
   const lavaStreams = useMemo(() => {
     const streams: THREE.CatmullRomCurve3[] = [];
     const streamCount = 2;
-    
+
     for (let i = 0; i < streamCount; i++) {
       const angleOffset = (i / streamCount) * Math.PI * 2 + Math.random();
       const pathPoints: THREE.Vector3[] = [];
@@ -169,13 +169,13 @@ const ActiveVolcano = ({
       for (let j = 0; j <= steps; j++) {
         const t = j / steps; // 0 (顶) -> 1 (底)
         const y = volcanoHeight * (1 - t); // 从顶往下流
-        
+
         // 获取当前高度对应的山体半径，稍微外扩防止穿模
         const r = getRadiusAtHeight(y) + 0.3;
-        
+
         // 稍微扭曲角度，产生蜿蜒效果
         const angle = angleOffset + Math.sin(t * 4) * 0.4;
-        
+
         pathPoints.push(new THREE.Vector3(
           Math.cos(angle) * r,
           y - 2, // 下移一点对齐火山位置
@@ -195,16 +195,16 @@ const ActiveVolcano = ({
         <latheGeometry args={[lathePoints, 9]} />
         <LowPolyVolcanoRockMaterial />
       </mesh>
-      
+
       {/* 顶部岩浆湖盖子 */}
       <mesh position={[0, volcanoHeight - 2.5, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[topRadius - 1, 16]} />
         <meshBasicMaterial color="#ff3300" />
       </mesh>
-      
+
       {/* 顶部强烈的光晕 */}
       <pointLight position={[0, volcanoHeight, 0]} color="#ff4400" intensity={5} distance={50} decay={2} />
-      
+
       {/* 岩浆河流 - 贴合山体表面 */}
       {lavaStreams.map((curve, index) => (
         <mesh key={index}>
@@ -212,7 +212,7 @@ const ActiveVolcano = ({
           <LavaStreamMaterial />
         </mesh>
       ))}
-      
+
       {/* 底部辉光（被岩浆照亮的感觉） */}
       <pointLight position={[0, 2, 0]} color="#ffaa00" intensity={2} distance={20} />
     </group>
@@ -220,18 +220,18 @@ const ActiveVolcano = ({
 };
 
 // --- 悬浮巨石 ---
-const FloatingRock = ({ 
-  position, 
+const FloatingRock = ({
+  position,
   size = 1,
   rotationSpeed = 0.1
-}: { 
+}: {
   position: [number, number, number];
   size?: number;
   rotationSpeed?: number;
 }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const initialY = position[1];
-  
+
   useFrame((state) => {
     if (meshRef.current) {
       // 缓慢旋转
@@ -241,13 +241,13 @@ const FloatingRock = ({
       meshRef.current.position.y = initialY + Math.sin(state.clock.elapsedTime * 0.5 + position[0]) * 0.5;
     }
   });
-  
+
   return (
     <mesh ref={meshRef} position={position}>
       <dodecahedronGeometry args={[size, 0]} />
-      <meshStandardMaterial 
-        color="#1a1210" 
-        roughness={0.9} 
+      <meshStandardMaterial
+        color="#1a1210"
+        roughness={0.9}
         metalness={0.1}
         emissive="#ff2200"
         emissiveIntensity={0.05}
@@ -279,8 +279,8 @@ export interface VolcanoWorldProps {
 export const VolcanoWorld: React.FC<VolcanoWorldProps> = ({ resetToken }) => (
   <>
     {/* 移除纯色背景，使用程序化天空 */}
-    <fog attach="fog" args={['#1a0805', 10, 80]} />
-    
+    <fog attach="fog" args={['#1a0805', 20, 100]} />
+
     {/* 
        Level 1: 熔岩火山 (Volcanic Lava)
        - 程序化火山天空穹顶
@@ -289,48 +289,48 @@ export const VolcanoWorld: React.FC<VolcanoWorldProps> = ({ resetToken }) => (
        - 岩浆瀑布
        - 火山口岩壁
     */}
-    
+
     {/* 程序化火山天空 - 替代纯色背景 */}
     <VolcanoSky />
-    
+
     {/* 保留 sunset 环境光用于物体反射 */}
     {/* <Environment preset="sunset" /> */}
-    
+
     {/* 增强的粒子效果 - 漂浮灰烬和火星 */}
-    <Sparkles 
-      count={300} 
-      scale={[40, 25, 60]} 
-      size={5} 
-      speed={0.6} 
-      opacity={0.6} 
+    <Sparkles
+      count={300}
+      scale={[40, 25, 60]}
+      size={5}
+      speed={0.6}
+      opacity={0.6}
       color="#ff6600"
       position={[0, 8, -20]}
     />
     {/* 额外的小火星层 */}
-    <Sparkles 
-      count={150} 
-      scale={[30, 15, 50]} 
-      size={3} 
-      speed={0.3} 
-      opacity={0.4} 
+    <Sparkles
+      count={150}
+      scale={[30, 15, 50]}
+      size={3}
+      speed={0.3}
+      opacity={0.4}
       color="#ffaa00"
       position={[0, 3, -15]}
     />
 
     {/* 光照系统 */}
-    <ambientLight intensity={0.25} color="#ff9966" />
-    <directionalLight 
-      position={[12, 18, 4]} 
-      intensity={0.8} 
+    <ambientLight intensity={0.7} color="#ff9966" />
+    <directionalLight
+      position={[12, 18, 4]}
+      intensity={2.0}
       color="#ffaa77"
-      castShadow 
-      shadow-mapSize-width={1024} 
-      shadow-mapSize-height={1024} 
+      castShadow
+      shadow-mapSize-width={1024}
+      shadow-mapSize-height={1024}
     />
     {/* 来自岩浆的底部光照 - 核心氛围光 */}
-    <pointLight position={[0, -2, -20]} intensity={1.5} color="#ff4400" distance={80} decay={1} />
-    <pointLight position={[-15, -2, -30]} intensity={0.8} color="#ff3300" distance={50} decay={2} />
-    <pointLight position={[15, -2, -10]} intensity={0.8} color="#ff5500" distance={50} decay={2} />
+    <pointLight position={[0, -2, -20]} intensity={4.0} color="#ff4400" distance={80} decay={1} />
+    <pointLight position={[-15, -2, -30]} intensity={2.5} color="#ff3300" distance={50} decay={2} />
+    <pointLight position={[15, -2, -10]} intensity={2.5} color="#ff5500" distance={50} decay={2} />
 
     {/* === 活火山 - 带有岩浆河流和裂缝发光 === */}
     <ActiveVolcano position={[-65, -15, -75]} scale={1.3} rotation={0.3} />
@@ -349,17 +349,17 @@ export const VolcanoWorld: React.FC<VolcanoWorldProps> = ({ resetToken }) => (
 
     {/* === 游戏场景 === */}
     <Platform position={[0, -0.25, 8]} size={[10, 0.5, 10]} safe interactive />
-    <Signboard 
-        position={[0, 5, 2]} 
-        rotation={[0.4, 0, 0]}
-        title="炼金术士试炼"
-        content={[
-            "欢迎来到模拟训练场。",
-            "按 [1] [2] [3] 切换元素枪。",
-            "左键射击以改变物质属性。",
-            "目标：抵达终点信标。",
-            "祝你好运，新兵。"
-        ]}
+    <Signboard
+      position={[0, 5, 2]}
+      rotation={[0.4, 0, 0]}
+      title="炼金术士试炼"
+      content={[
+        "欢迎来到模拟训练场。",
+        "按 [1] [2] [3] 切换元素枪。",
+        "左键射击以改变物质属性。",
+        "目标：抵达终点信标。",
+        "祝你好运，新兵。"
+      ]}
     />
     <LavaPlane />
     {JELLY_FLOATERS.map((data, index) => (

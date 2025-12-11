@@ -32,7 +32,7 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
   const moveLeft = useRef(false);
   const moveRight = useRef(false);
   const canJump = useRef(false);
-  
+
   const velocity = useRef(new THREE.Vector3());
   const direction = useRef(new THREE.Vector3());
   const [isShooting, setIsShooting] = useState(false);
@@ -40,7 +40,7 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
 
   // Raycaster for shooting
   const raycaster = useRef(new THREE.Raycaster());
-  
+
   // Physics / Jelly Logic Refs
   const downRaycaster = useRef(new THREE.Raycaster());
   const isOnJelly = useRef(false);
@@ -101,10 +101,10 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
         case 'Space':
           if (canJump.current) {
             if (isOnJelly.current) {
-                // Super Jump on Jelly
-                velocity.current.y = JUMP_FORCE * 1.5;
+              // Super Jump on Jelly
+              velocity.current.y = JUMP_FORCE * 1.5;
             } else {
-                velocity.current.y = JUMP_FORCE;
+              velocity.current.y = JUMP_FORCE;
             }
             canJump.current = false;
           }
@@ -134,10 +134,10 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     };
 
     const onMouseDown = (event: any) => {
-        if (!isLocked) return;
-        setIsShooting(true);
-        handleShoot();
-        setTimeout(() => setIsShooting(false), 150);
+      if (!isLocked) return;
+      setIsShooting(true);
+      handleShoot();
+      setTimeout(() => setIsShooting(false), 150);
     };
 
     const doc = (window as any).document;
@@ -154,7 +154,7 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
         doc.removeEventListener('mousedown', onMouseDown);
       }
     };
-  }, [isLocked, currentGun]); 
+  }, [isLocked, currentGun]);
 
   useEffect(() => {
     camera.position.copy(spawnPoint);
@@ -164,64 +164,64 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
   }, [camera, spawnPoint, stageId]);
 
   const handleShoot = () => {
-      // Calculate origin and direction
-      // Origin: slightly in front of the camera to avoid clipping with player collider if any
-      const origin = camera.position.clone();
-      const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
-      
-      // Adjust origin to be slightly lower and to the right to match gun position visually (optional, but looks better)
-      // For now, center screen is fine for aiming accuracy.
-      
-      onShoot(origin, direction);
+    // Calculate origin and direction
+    // Origin: slightly in front of the camera to avoid clipping with player collider if any
+    const origin = camera.position.clone();
+    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
 
-      // All guns now use projectiles, so we remove the legacy hitscan logic entirely
-      /* 
-      if (currentGun !== GunType.JELLY && currentGun !== GunType.GHOST) {
-        // ... legacy hitscan code ...
-      }
-      */
+    // Adjust origin to be slightly lower and to the right to match gun position visually (optional, but looks better)
+    // For now, center screen is fine for aiming accuracy.
+
+    onShoot(origin, direction);
+
+    // All guns now use projectiles, so we remove the legacy hitscan logic entirely
+    /* 
+    if (currentGun !== GunType.JELLY && currentGun !== GunType.GHOST) {
+      // ... legacy hitscan code ...
+    }
+    */
   };
 
-    const checkCollision = (newPos: THREE.Vector3) => {
-      // Use cached colliders instead of traversing scene
-      for (const obj of collidersRef.current) {
-          // FIX: Skip detached objects (stale references)
-          if (!obj.parent) continue;
+  const checkCollision = (newPos: THREE.Vector3) => {
+    // Use cached colliders instead of traversing scene
+    for (const obj of collidersRef.current) {
+      // FIX: Skip detached objects (stale references)
+      if (!obj.parent) continue;
 
-          // Ghost objects allow pass-through
-          if (obj.userData.type === GunType.GHOST) continue;
+      // Ghost objects allow pass-through
+      if (obj.userData.type === GunType.GHOST) continue;
 
-          const objPos = new THREE.Vector3();
-          obj.getWorldPosition(objPos);
+      const objPos = new THREE.Vector3();
+      obj.getWorldPosition(objPos);
 
-        const size = (obj.userData.size as [number, number, number]) ?? [1.5, 1.5, 1.5];
-        const halfSizeX = size[0] / 2;
-        const halfSizeY = size[1] / 2;
-        const halfSizeZ = size[2] / 2;
-        const objMinX = objPos.x - halfSizeX;
-        const objMaxX = objPos.x + halfSizeX;
-        const objMinZ = objPos.z - halfSizeZ;
-        const objMaxZ = objPos.z + halfSizeZ;
-        const objMinY = objPos.y - halfSizeY;
-        const objMaxY = objPos.y + halfSizeY;
+      const size = (obj.userData.size as [number, number, number]) ?? [1.5, 1.5, 1.5];
+      const halfSizeX = size[0] / 2;
+      const halfSizeY = size[1] / 2;
+      const halfSizeZ = size[2] / 2;
+      const objMinX = objPos.x - halfSizeX;
+      const objMaxX = objPos.x + halfSizeX;
+      const objMinZ = objPos.z - halfSizeZ;
+      const objMaxZ = objPos.z + halfSizeZ;
+      const objMinY = objPos.y - halfSizeY;
+      const objMaxY = objPos.y + halfSizeY;
 
-          const pMinX = newPos.x - PLAYER_RADIUS;
-          const pMaxX = newPos.x + PLAYER_RADIUS;
-          const pMinZ = newPos.z - PLAYER_RADIUS;
-          const pMaxZ = newPos.z + PLAYER_RADIUS;
-          
-        const pFeet = newPos.y - PLAYER_EYE_HEIGHT; 
-        const pHead = newPos.y + 0.1; 
+      const pMinX = newPos.x - PLAYER_RADIUS;
+      const pMaxX = newPos.x + PLAYER_RADIUS;
+      const pMinZ = newPos.z - PLAYER_RADIUS;
+      const pMaxZ = newPos.z + PLAYER_RADIUS;
 
-          const overlapX = pMinX <= objMaxX && pMaxX >= objMinX;
-          const overlapZ = pMinZ <= objMaxZ && pMaxZ >= objMinZ;
-          const overlapY = pFeet <= objMaxY && pHead >= objMinY;
+      const pFeet = newPos.y - PLAYER_EYE_HEIGHT;
+      const pHead = newPos.y + 0.1;
 
-          if (overlapX && overlapZ && overlapY) {
-              return true;
-          }
+      const overlapX = pMinX <= objMaxX && pMaxX >= objMinX;
+      const overlapZ = pMinZ <= objMaxZ && pMaxZ >= objMinZ;
+      const overlapY = pFeet <= objMaxY && pHead >= objMinY;
+
+      if (overlapX && overlapZ && overlapY) {
+        return true;
       }
-      return false;
+    }
+    return false;
   };
 
   const respawn = useCallback(() => {
@@ -236,9 +236,9 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
 
   const triggerDeath = useCallback((reason: 'lava' | 'void') => {
     if (isDying.current || deathCooldown.current > 0) return;
-    
+
     isDying.current = true;
-    
+
     // Stop horizontal movement immediately
     velocity.current.x = 0;
     velocity.current.z = 0;
@@ -246,9 +246,9 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     onDeath?.(reason);
 
     if (reason === 'lava') {
-        velocity.current.y = 6.0;
+      velocity.current.y = 6.0;
     }
-    
+
     setTimeout(respawn, 1200);
   }, [onDeath, respawn]);
 
@@ -266,11 +266,11 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     const dt = Math.min(delta, 0.1);
 
     // --- PHYSICS / MOVEMENT ---
-    
+
     // 1. Jelly Detection (Raycasting)
     downRaycaster.current.set(camera.position, new THREE.Vector3(0, -1, 0));
     downRaycaster.current.far = PLAYER_EYE_HEIGHT + 6; // allow lava plane detection well below feet
-    
+
     // Use cached colliders for raycasting too
     // FIX: Enable recursive raycasting to hit children meshes even if collidersRef contains Groups
     const intersects = downRaycaster.current.intersectObjects(collidersRef.current, true);
@@ -288,11 +288,11 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
       // Traverse up to find interactive data
       let target = hit.object;
       let data = target.userData ?? {};
-      
+
       // If current object isn't interactive, check parents
-      while(target && !data.isInteractive && !data.isSafeSurface && !data.isLava && target.parent) {
-          target = target.parent;
-          data = target.userData ?? {};
+      while (target && !data.isInteractive && !data.isSafeSurface && !data.isLava && target.parent) {
+        target = target.parent;
+        data = target.userData ?? {};
       }
 
       if (data.isLava) {
@@ -343,30 +343,30 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     // Optimization: Run raycast only every 4 frames to save performance
     frameCounter.current += 1;
     if (frameCounter.current % 4 === 0) {
-        // We reuse the main raycaster for this, but we need to set it from camera
-        raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
-        // Limit distance for interaction feedback if desired, or infinite
-        raycaster.current.far = 100; 
-        // Use cached colliders for aim detection too
-        // FIX: Enable recursive raycasting to hit children meshes even if collidersRef contains Groups
-        const aimIntersects = raycaster.current.intersectObjects(collidersRef.current, true);
-        let foundInteractive = false;
-        for (const hit of aimIntersects) {
-            let target = hit.object;
-            let data = target.userData ?? {};
-            while(target && !data.isInteractive && target.parent) {
-                target = target.parent;
-                data = target.userData ?? {};
-            }
+      // We reuse the main raycaster for this, but we need to set it from camera
+      raycaster.current.setFromCamera(new THREE.Vector2(0, 0), camera);
+      // Limit distance for interaction feedback if desired, or infinite
+      raycaster.current.far = 100;
+      // Use cached colliders for aim detection too
+      // FIX: Enable recursive raycasting to hit children meshes even if collidersRef contains Groups
+      const aimIntersects = raycaster.current.intersectObjects(collidersRef.current, true);
+      let foundInteractive = false;
+      for (const hit of aimIntersects) {
+        let target = hit.object;
+        let data = target.userData ?? {};
+        while (target && !data.isInteractive && target.parent) {
+          target = target.parent;
+          data = target.userData ?? {};
+        }
 
-            if (data.isInteractive) {
-                foundInteractive = true;
-                break;
-            }
+        if (data.isInteractive) {
+          foundInteractive = true;
+          break;
         }
-        if (foundInteractive !== isHovering) {
-            setIsHovering(foundInteractive);
-        }
+      }
+      if (foundInteractive !== isHovering) {
+        setIsHovering(foundInteractive);
+      }
     }
 
     velocity.current.y -= GRAVITY * dt;
@@ -381,16 +381,16 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
         // Landing
         const oldVelocityY = velocity.current.y;
         camera.position.y -= oldVelocityY * dt; // Undo move
-        
+
         if (isOnJelly.current && oldVelocityY < -2.0) {
-            // Trampoline Effect
-            // Bounce direction: Normal * Speed * Damping
-            const speed = -oldVelocityY * 0.9;
-            velocity.current.copy(jellyNormal.current).multiplyScalar(speed);
-            canJump.current = true;
+          // Trampoline Effect
+          // Bounce direction: Normal * Speed * Damping
+          const speed = -oldVelocityY * 0.9;
+          velocity.current.copy(jellyNormal.current).multiplyScalar(speed);
+          canJump.current = true;
         } else {
-            velocity.current.y = 0;
-            canJump.current = true;
+          velocity.current.y = 0;
+          canJump.current = true;
         }
       }
     }
@@ -409,7 +409,7 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
     forward.y = 0;
     forward.normalize();
-    
+
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
     right.y = 0;
     right.normalize();
@@ -417,15 +417,15 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     const moveX = right.clone().multiplyScalar(-velocity.current.x * dt);
     camera.position.add(moveX);
     if (checkCollision(camera.position)) {
-        camera.position.sub(moveX); 
-        velocity.current.x = 0;
+      camera.position.sub(moveX);
+      velocity.current.x = 0;
     }
 
     const moveZ = forward.clone().multiplyScalar(velocity.current.z * dt);
     camera.position.add(moveZ);
     if (checkCollision(camera.position)) {
-        camera.position.sub(moveZ); 
-        velocity.current.z = 0;
+      camera.position.sub(moveZ);
+      velocity.current.z = 0;
     }
 
     if (camera.position.y < DEATH_HEIGHT) {
@@ -440,12 +440,12 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     if (deathCooldown.current > 0) {
       deathCooldown.current = Math.max(0, deathCooldown.current - delta);
     }
-  }); 
+  });
 
   return (
     <>
       <PointerLockControls onLock={() => setIsLocked(true)} onUnlock={() => setIsLocked(false)} />
-      
+
       {/* 
           HUD RENDERER 
           Using Drei's Hud component renders the gun in a separate pass on top of the scene.
@@ -453,19 +453,19 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
           caused by manual gl.render calls.
       */}
       <Hud renderPriority={1}>
-          {/* The gun has its own fixed camera, so it stays locked to the screen */}
-          <PerspectiveCamera makeDefault position={[0, 0, 0]} fov={75} />
-          
-          {/* Lighting for the gun model */}
-          <ambientLight intensity={0.8} />
-          <pointLight position={[2, 2, 5]} intensity={1.5} />
-          {/* <Environment preset="city" /> */}
-          
-          {/* The Gun */}
-          <GunModel currentGun={currentGun} isShooting={isShooting} />
-          
-          {/* The Crosshair */}
-          <Crosshair currentGun={currentGun} isShooting={isShooting} isHovering={isHovering} />
+        {/* The gun has its own fixed camera, so it stays locked to the screen */}
+        <PerspectiveCamera makeDefault position={[0, 0, 0]} fov={75} />
+
+        {/* Lighting for the gun model */}
+        <ambientLight intensity={1.5} />
+        <pointLight position={[2, 2, 5]} intensity={2.0} />
+        <Environment preset="city" />
+
+        {/* The Gun */}
+        <GunModel currentGun={currentGun} isShooting={isShooting} />
+
+        {/* The Crosshair */}
+        <Crosshair currentGun={currentGun} isShooting={isShooting} isHovering={isHovering} />
       </Hud>
     </>
   );
