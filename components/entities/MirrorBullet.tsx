@@ -1,7 +1,8 @@
 import React, { useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { GunType } from '../types';
+import { MirrorMaterial } from '@/components/materials';
+import { GunType } from '@/types';
 
 interface MirrorBulletProps {
   position: THREE.Vector3;
@@ -33,36 +34,51 @@ export const MirrorBullet: React.FC<MirrorBulletProps> = ({ position, direction,
     const rayDirection = direction.clone().normalize();
     raycaster.current.set(ref.current.position, rayDirection);
     raycaster.current.far = moveDistance + 0.1;
-    
+
     const intersects = raycaster.current.intersectObjects(scene.children, true);
-    
+
+    // Filter intersects - CRITICAL: Exclude gun model, crosshair, and UI elements
     const hit = intersects.find(i => {
-        if (i.object === ref.current) return false;
-        // Ignore Lines and other non-mesh objects to prevent lag
-        if (i.object.type === 'Line' || i.object.type === 'LineSegments') return false;
-        return i.object.type === 'Mesh';
+      if (i.object === ref.current) return false;
+
+      // Ignore gun model and crosshair - only accept objects with game-relevant userData
+      let target: THREE.Object3D | null = i.object;
+      while (target) {
+        const userData = target.userData;
+        // Accept if it's interactive, a platform, lava, or has safe surface
+        if (userData && (
+          userData.isInteractive ||
+          userData.isSafeSurface ||
+          userData.isLava ||
+          userData.isTargetSurface
+        )) {
+          return true;
+        }
+        target = target.parent;
+      }
+      return false;
     });
 
     if (hit) {
-        // Trigger interaction immediately without explosion visual
-        // Traverse up to find the interactive parent
-        let target: THREE.Object3D | null = hit.object;
-        let loopCount = 0;
-        while (target && loopCount < 20) { // Safety break
-            if (target.userData && target.userData.isInteractive && target.userData.hitHandler) {
-                target.userData.hitHandler(GunType.MIRROR);
-                break;
-            }
-            target = target.parent;
-            loopCount++;
+      // Trigger interaction immediately without explosion visual
+      // Traverse up to find the interactive parent
+      let target: THREE.Object3D | null = hit.object;
+      let loopCount = 0;
+      while (target && loopCount < 20) { // Safety break
+        if (target.userData && target.userData.isInteractive && target.userData.hitHandler) {
+          target.userData.hitHandler(GunType.MIRROR);
+          break;
         }
-        
-        onHit(); // Disappear immediately
+        target = target.parent;
+        loopCount++;
+      }
+
+      onHit(); // Disappear immediately
     } else {
-        ref.current.position.copy(nextPos);
-        if (ref.current.position.distanceTo(initialPos.current) > 100) {
-            onHit();
-        }
+      ref.current.position.copy(nextPos);
+      if (ref.current.position.distanceTo(initialPos.current) > 100) {
+        onHit();
+      }
     }
   });
 
@@ -71,7 +87,7 @@ export const MirrorBullet: React.FC<MirrorBulletProps> = ({ position, direction,
       {/* Sharp, faceted crystal shape (Octahedron is perfect for a diamond/crystal shard) */}
       <octahedronGeometry args={[1, 0]} />
       <meshPhysicalMaterial
-        color="#ffffff" 
+        color="#ffffff"
         roughness={0.0}
         metalness={1.0}
         envMapIntensity={2.0} // Strong reflections

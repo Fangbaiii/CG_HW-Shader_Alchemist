@@ -2,7 +2,8 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { MeshDistortMaterial } from '@react-three/drei';
 import * as THREE from 'three';
-import { GunType } from '../types';
+import { JellyMaterial } from '@/components/materials';
+import { GunType } from '@/types';
 
 interface JellyBulletProps {
   position: THREE.Vector3;
@@ -15,23 +16,23 @@ export const JellyBullet: React.FC<JellyBulletProps> = ({ position, direction, o
   const [exploded, setExploded] = useState(false);
   const speed = 25; // Fast but visible
   const { scene } = useThree();
-  
+
   // Store initial position to avoid re-calculating on every render if props change (they shouldn't)
   const initialPos = useRef(position.clone());
-  
+
   useFrame((state, delta) => {
     if (!ref.current) return;
 
     if (exploded) {
-        // Explosion animation
-        ref.current.scale.multiplyScalar(1 + 15 * delta);
-        const material = ref.current.material as THREE.Material;
-        if (material.opacity > 0) {
-            material.opacity -= delta * 4;
-        } else {
-            onHit(); // Remove bullet
-        }
-        return;
+      // Explosion animation
+      ref.current.scale.multiplyScalar(1 + 15 * delta);
+      const material = ref.current.material as THREE.Material;
+      if (material.opacity > 0) {
+        material.opacity -= delta * 4;
+      } else {
+        onHit(); // Remove bullet
+      }
+      return;
     }
 
     // Movement
@@ -43,43 +44,57 @@ export const JellyBullet: React.FC<JellyBulletProps> = ({ position, direction, o
     // Raycast from current position to next position
     const rayDirection = direction.clone().normalize();
     const raycaster = new THREE.Raycaster(ref.current.position, rayDirection, 0, moveDistance + 0.1);
-    
+
     // Intersect with everything in the scene
     const intersects = raycaster.intersectObjects(scene.children, true);
-    
-    // Filter intersects
+
+    // Filter intersects - CRITICAL: Exclude gun model, crosshair, and UI elements
     const hit = intersects.find(i => {
-        // Ignore the bullet itself
-        if (i.object === ref.current) return false;
-        // Ignore the player (usually represented by a camera or a specific object, but here we might hit walls/objects)
-        // Assuming player is not in the hittable objects list or we ignore it based on distance/type
-        // For now, let's assume we hit anything that is a Mesh
-        return i.object.type === 'Mesh';
+      // Ignore the bullet itself
+      if (i.object === ref.current) return false;
+
+      // Ignore gun model and crosshair (they don't have collision-relevant userData)
+      // Only accept objects that have game-relevant userData
+      let target: THREE.Object3D | null = i.object;
+      while (target) {
+        const userData = target.userData;
+        // Accept if it's interactive, a platform, lava, or has safe surface
+        if (userData && (
+          userData.isInteractive ||
+          userData.isSafeSurface ||
+          userData.isLava ||
+          userData.isTargetSurface
+        )) {
+          return true;
+        }
+        target = target.parent;
+      }
+      return false;
     });
 
     if (hit) {
-        // Move to hit point
-        ref.current.position.copy(hit.point);
-        setExploded(true);
+      // Move to hit point
+      ref.current.position.copy(hit.point);
+      setExploded(true);
 
-        // Trigger interaction
-        // Traverse up to find the interactive parent if the hit object itself isn't one
-        let target: THREE.Object3D | null = hit.object;
-        while (target) {
-            if (target.userData && target.userData.isInteractive && target.userData.hitHandler) {
-                target.userData.hitHandler(GunType.JELLY);
-                break;
-            }
-            target = target.parent;
+      // Trigger interaction
+      // Traverse up to find the interactive parent if the hit object itself isn't one
+      let target: THREE.Object3D | null = hit.object;
+      while (target) {
+        if (target.userData && target.userData.isInteractive && target.userData.hitHandler) {
+          target.userData.hitHandler(GunType.JELLY);
+          break;
         }
+        target = target.parent;
+      }
     } else {
-        // No hit, move forward
-        ref.current.position.copy(nextPos);
-        
-        // Cleanup if too far
-        if (ref.current.position.distanceTo(initialPos.current) > 100) {
-            onHit();
-        }
+      // No hit, move forward
+      ref.current.position.copy(nextPos);
+
+      // Cleanup if too far
+      if (ref.current.position.distanceTo(initialPos.current) > 100) {
+        onHit();
+      }
     }
   });
 

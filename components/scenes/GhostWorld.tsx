@@ -2,8 +2,9 @@ import React, { useRef, useMemo, useLayoutEffect } from 'react';
 import { Environment, Stars } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { LabObject } from './LabObject';
-import { GunType } from '../types';
+import { LabObject } from '@/components/entities/LabObject';
+import { GhostMaterial, GhostWireframeMaterial } from '@/components/materials';
+import { GunType } from '@/types';
 
 type LabDefinition = {
   position: [number, number, number];
@@ -18,7 +19,7 @@ type LabDefinition = {
 const GHOST_LEVEL_OBJECTS: LabDefinition[] = [
   // 1. First Gate - Blocks the start
   { position: [0, 1.5, -6], size: [8, 4, 0.5] },
-  
+
   // 2. Platform after gate
   { position: [0, -0.5, -10], size: [4, 0.5, 4], isSafeSurface: true, isTargetSurface: true },
 
@@ -76,7 +77,7 @@ const GoalBeacon = ({ position }: { position: [number, number, number] }) => (
 const PlanetSurface: React.FC = () => {
   const { camera } = useThree();
   const materialRef = useRef<THREE.ShaderMaterial>(null);
-  
+
   // 生成裂缝数据传入shader的uniform数组
   const crackData = useMemo(() => {
     const data: number[] = [];
@@ -85,7 +86,7 @@ const PlanetSurface: React.FC = () => {
     });
     return new Float32Array(data);
   }, []);
-  
+
   // 自定义着色器材质
   const planetMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -318,7 +319,7 @@ const PlanetSurface: React.FC = () => {
       depthWrite: true,
     });
   }, [crackData]);
-  
+
   // 动画更新
   useFrame((state) => {
     if (planetMaterial) {
@@ -326,10 +327,10 @@ const PlanetSurface: React.FC = () => {
       planetMaterial.uniforms.uPlayerPos.value.copy(camera.position);
     }
   });
-  
+
   return (
-    <mesh 
-      rotation={[-Math.PI / 2, 0, 0]} 
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
       position={[0, -0.5, -25]}
       receiveShadow
     >
@@ -342,7 +343,7 @@ const PlanetSurface: React.FC = () => {
 // --- 起始平台 (星球风格) ---
 const StartingPlatform: React.FC = () => {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
-  
+
   const platformMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
       uniforms: {
@@ -426,18 +427,18 @@ const StartingPlatform: React.FC = () => {
       `,
     });
   }, []);
-  
+
   useFrame((state) => {
     if (platformMaterial) {
       platformMaterial.uniforms.uTime.value = state.clock.elapsedTime;
     }
   });
-  
+
   return (
-    <mesh 
-      position={[0, -0.25, -2]} 
-      castShadow 
-      receiveShadow 
+    <mesh
+      position={[0, -0.25, -2]}
+      castShadow
+      receiveShadow
       userData={{ isSafeSurface: true, isInteractive: true, size: [8, 0.5, 8], type: null }}
     >
       <boxGeometry args={[8, 0.5, 8]} />
@@ -463,128 +464,129 @@ const RuinedMountain: React.FC<{
   roughness = 1.5,
   color = '#5a5550'
 }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  
-  // 生成山体轮廓点
-  const points = useMemo(() => {
-    const pts: THREE.Vector2[] = [];
-    const segments = 20;
-    
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
-      let radius: number;
-      if (t < 0.1) {
-        radius = baseRadius * (1 - t * 0.3);
-      } else if (t < 0.7) {
-        const localT = (t - 0.1) / 0.6;
-        radius = baseRadius * (0.97 - localT * 0.6) * (1 + Math.sin(localT * Math.PI * 3) * 0.08);
-      } else {
-        const localT = (t - 0.7) / 0.3;
-        radius = baseRadius * (0.37 - localT * 0.35) * (1 - localT * 0.5);
+    const meshRef = useRef<THREE.Mesh>(null);
+
+    // 生成山体轮廓点
+    const points = useMemo(() => {
+      const pts: THREE.Vector2[] = [];
+      const segments = 20;
+
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        let radius: number;
+        if (t < 0.1) {
+          radius = baseRadius * (1 - t * 0.3);
+        } else if (t < 0.7) {
+          const localT = (t - 0.1) / 0.6;
+          radius = baseRadius * (0.97 - localT * 0.6) * (1 + Math.sin(localT * Math.PI * 3) * 0.08);
+        } else {
+          const localT = (t - 0.7) / 0.3;
+          radius = baseRadius * (0.37 - localT * 0.35) * (1 - localT * 0.5);
+        }
+
+        const y = t * height;
+        pts.push(new THREE.Vector2(Math.max(0.1, radius), y));
       }
-      
-      const y = t * height;
-      pts.push(new THREE.Vector2(Math.max(0.1, radius), y));
-    }
-    return pts;
-  }, [baseRadius, height]);
-  
-  // 生成修改后的几何体 - 只执行一次
-  const modifiedGeometry = useMemo(() => {
-    const geometry = new THREE.LatheGeometry(points, 24);
-    const pos = geometry.getAttribute('position');
-    
-    // 确定性随机数生成器
-    const seed = Math.abs(position[0] * 1000 + position[2]);
-    let s = seed;
-    const random = () => {
-      s = (s * 9301 + 49297) % 233280;
-      return s / 233280;
-    };
-    
-    // 保存原始位置以便计算
-    const originalPositions = new Float32Array(pos.count * 3);
-    for (let i = 0; i < pos.count; i++) {
-      originalPositions[i * 3] = pos.getX(i);
-      originalPositions[i * 3 + 1] = pos.getY(i);
-      originalPositions[i * 3 + 2] = pos.getZ(i);
-    }
-    
-    for (let i = 0; i < pos.count; i++) {
-      const x = originalPositions[i * 3];
-      const y = originalPositions[i * 3 + 1];
-      const z = originalPositions[i * 3 + 2];
-      
-      // 根据高度调整噪声强度：底部稳定，中上部崎岖
-      const heightFactor = Math.pow(y / height, 0.5);
-      const noiseStrength = roughness * heightFactor;
-      
-      // 多层噪声叠加 - 增强崎岖感
-      const angle = Math.atan2(z, x);
-      const noise1 = Math.sin(angle * 5 + y * 0.3) * noiseStrength * 0.5;
-      const noise2 = Math.sin(angle * 11 + y * 0.7) * noiseStrength * 0.3;
-      const noise3 = Math.sin(angle * 17 + y * 1.2) * noiseStrength * 0.1;
-      const noise4 = (random() - 0.5) * noiseStrength * 0.6;
-      
-      const offset = noise1 + noise2 + noise3 + noise4;
-      
-      // 径向偏移
-      const dist = Math.sqrt(x * x + z * z);
-      if (dist > 0.1) {
-        const scale = 1 + offset / dist;
-        pos.setX(i, x * scale);
-        pos.setZ(i, z * scale);
+      return pts;
+    }, [baseRadius, height]);
+
+    // 生成修改后的几何体 - 只执行一次
+    const modifiedGeometry = useMemo(() => {
+      const geometry = new THREE.LatheGeometry(points, 24);
+      const pos = geometry.getAttribute('position');
+
+      // 确定性随机数生成器
+      const seed = Math.abs(position[0] * 1000 + position[2]);
+      let s = seed;
+      const random = () => {
+        s = (s * 9301 + 49297) % 233280;
+        return s / 233280;
+      };
+
+      // 保存原始位置以便计算
+      const originalPositions = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i++) {
+        originalPositions[i * 3] = pos.getX(i);
+        originalPositions[i * 3 + 1] = pos.getY(i);
+        originalPositions[i * 3 + 2] = pos.getZ(i);
       }
-      
-      // 垂直方向变化 - 增强岩石层次感
-      const verticalNoise = (random() - 0.5) * roughness * 0.3;
-      pos.setY(i, y + verticalNoise);
-    }
-    
-    pos.needsUpdate = true;
-    geometry.computeVertexNormals();
-    
-    return geometry;
-  }, [points, roughness, height, position]);
-  
-  return (
-    <mesh ref={meshRef} position={position} scale={scale} castShadow receiveShadow geometry={modifiedGeometry}>
-      <meshStandardMaterial
-        color={color}
-        roughness={0.95}
-        metalness={0.15}
-        flatShading
-        emissive="#3a3530"
-        emissiveIntensity={0.25}
-      />
-    </mesh>
-  );
-};
+
+      for (let i = 0; i < pos.count; i++) {
+        const x = originalPositions[i * 3];
+        const y = originalPositions[i * 3 + 1];
+        const z = originalPositions[i * 3 + 2];
+
+        // 根据高度调整噪声强度：底部稳定，中上部崎岖
+        const heightFactor = Math.pow(y / height, 0.5);
+        const noiseStrength = roughness * heightFactor;
+
+        // 多层噪声叠加 - 增强崎岖感
+        const angle = Math.atan2(z, x);
+        const noise1 = Math.sin(angle * 5 + y * 0.3) * noiseStrength * 0.5;
+        const noise2 = Math.sin(angle * 11 + y * 0.7) * noiseStrength * 0.3;
+        const noise3 = Math.sin(angle * 17 + y * 1.2) * noiseStrength * 0.1;
+        const noise4 = (random() - 0.5) * noiseStrength * 0.6;
+
+        const offset = noise1 + noise2 + noise3 + noise4;
+
+        // 径向偏移
+        const dist = Math.sqrt(x * x + z * z);
+        if (dist > 0.1) {
+          const scale = 1 + offset / dist;
+          pos.setX(i, x * scale);
+          pos.setZ(i, z * scale);
+        }
+
+        // 垂直方向变化 - 增强岩石层次感
+        const verticalNoise = (random() - 0.5) * roughness * 0.3;
+        pos.setY(i, y + verticalNoise);
+      }
+
+      pos.needsUpdate = true;
+      geometry.computeVertexNormals();
+
+      return geometry;
+    }, [points, roughness, height, position]);
+
+    return (
+      <mesh ref={meshRef} position={position} scale={scale} castShadow receiveShadow geometry={modifiedGeometry}>
+        <meshStandardMaterial
+          color={color}
+          roughness={0.95}
+          metalness={0.15}
+          flatShading
+          emissive="#3a3530"
+          emissiveIntensity={0.25}
+        />
+      </mesh>
+    );
+  };
 
 // 山脉群组
 const MountainRange: React.FC = () => {
   // 分布在玩家周围远处的山脉 - 提亮颜色
+  // Note: roughness is pre-calculated in useMemo to avoid re-computing on each render
   const mountains = useMemo(() => [
     // 左侧山脉群
-    { position: [-35, -20, -25] as [number, number, number], scale: 1.2, height: 18, baseRadius: 10, color: '#5a5550' },
-    { position: [-50, -20, -15] as [number, number, number], scale: 0.9, height: 14, baseRadius: 8, color: '#524d45' },
-    { position: [-42, -20, -5] as [number, number, number], scale: 1.0, height: 12, baseRadius: 7, color: '#585248' },
-    
+    { position: [-35, -20, -25] as [number, number, number], scale: 1.2, height: 18, baseRadius: 10, color: '#5a5550', roughness: 1.35 },
+    { position: [-50, -20, -15] as [number, number, number], scale: 0.9, height: 14, baseRadius: 8, color: '#524d45', roughness: 1.55 },
+    { position: [-42, -20, -5] as [number, number, number], scale: 1.0, height: 12, baseRadius: 7, color: '#585248', roughness: 1.42 },
+
     // 右侧山脉群
-    { position: [38, -20, -30] as [number, number, number], scale: 1.3, height: 20, baseRadius: 11, color: '#5a5550' },
-    { position: [52, -20, -18] as [number, number, number], scale: 0.85, height: 13, baseRadius: 7, color: '#4f4a42' },
-    { position: [45, -20, -8] as [number, number, number], scale: 1.1, height: 15, baseRadius: 9, color: '#565048' },
-    
+    { position: [38, -20, -30] as [number, number, number], scale: 1.3, height: 20, baseRadius: 11, color: '#5a5550', roughness: 1.28 },
+    { position: [52, -20, -18] as [number, number, number], scale: 0.85, height: 13, baseRadius: 7, color: '#4f4a42', roughness: 1.62 },
+    { position: [45, -20, -8] as [number, number, number], scale: 1.1, height: 15, baseRadius: 9, color: '#565048', roughness: 1.45 },
+
     // 后方远景山脉
-    { position: [0, -20, -55] as [number, number, number], scale: 1.5, height: 20, baseRadius: 14, color: '#4a4540' },
-    { position: [-10, -20, -50] as [number, number, number], scale: 1.1, height: 16, baseRadius: 9, color: '#504b45' },
-    { position: [22, -20, -52] as [number, number, number], scale: 1.25, height: 19, baseRadius: 11, color: '#4d4842' },
-    
+    { position: [0, -20, -55] as [number, number, number], scale: 1.5, height: 20, baseRadius: 14, color: '#4a4540', roughness: 1.38 },
+    { position: [-10, -20, -50] as [number, number, number], scale: 1.1, height: 16, baseRadius: 9, color: '#504b45', roughness: 1.52 },
+    { position: [22, -20, -52] as [number, number, number], scale: 1.25, height: 19, baseRadius: 11, color: '#4d4842', roughness: 1.33 },
+
     // 前方两侧点缀
-    { position: [-30, -20, 15] as [number, number, number], scale: 0.7, height: 10, baseRadius: 6, color: '#585550' },
-    { position: [32, -20, 18] as [number, number, number], scale: 0.8, height: 11, baseRadius: 6.5, color: '#565350' },
+    { position: [-30, -20, 15] as [number, number, number], scale: 0.7, height: 10, baseRadius: 6, color: '#585550', roughness: 1.58 },
+    { position: [32, -20, 18] as [number, number, number], scale: 0.8, height: 11, baseRadius: 6.5, color: '#565350', roughness: 1.48 },
   ], []);
-  
+
   return (
     <group>
       {mountains.map((mt, i) => (
@@ -594,7 +596,7 @@ const MountainRange: React.FC = () => {
           scale={mt.scale}
           height={mt.height}
           baseRadius={mt.baseRadius}
-          roughness={1.2 + Math.random() * 0.5}
+          roughness={mt.roughness}
           color={mt.color}
         />
       ))}
@@ -611,22 +613,22 @@ const NebulaCloud: React.FC<{
   color1?: string;
   color2?: string;
   opacity?: number;
-}> = ({ 
-  position, 
-  scale = 50, 
-  color1 = '#ff00aa', 
+}> = ({
+  position,
+  scale = 50,
+  color1 = '#ff00aa',
   color2 = '#00aaff',
-  opacity = 0.3 
+  opacity = 0.3
 }) => {
-  const material = useMemo(() => {
-    return new THREE.ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0 },
-        uColor1: { value: new THREE.Color(color1) },
-        uColor2: { value: new THREE.Color(color2) },
-        uOpacity: { value: opacity },
-      },
-      vertexShader: `
+    const material = useMemo(() => {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uColor1: { value: new THREE.Color(color1) },
+          uColor2: { value: new THREE.Color(color2) },
+          uOpacity: { value: opacity },
+        },
+        vertexShader: `
         varying vec2 vUv;
         
         void main() {
@@ -634,7 +636,7 @@ const NebulaCloud: React.FC<{
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
-      fragmentShader: `
+        fragmentShader: `
         uniform float uTime;
         uniform vec3 uColor1;
         uniform vec3 uColor2;
@@ -694,36 +696,36 @@ const NebulaCloud: React.FC<{
           gl_FragColor = vec4(color * (0.5 + density * 0.5), alpha);
         }
       `,
-      transparent: true,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+    }, [color1, color2, opacity]);
+
+    useFrame((state) => {
+      material.uniforms.uTime.value = state.clock.elapsedTime;
     });
-  }, [color1, color2, opacity]);
-  
-  useFrame((state) => {
-    material.uniforms.uTime.value = state.clock.elapsedTime;
-  });
-  
-  return (
-    <mesh position={position}>
-      <planeGeometry args={[scale, scale]} />
-      <primitive object={material} attach="material" />
-    </mesh>
-  );
-};
+
+    return (
+      <mesh position={position}>
+        <planeGeometry args={[scale, scale]} />
+        <primitive object={material} attach="material" />
+      </mesh>
+    );
+  };
 
 // 星云群组
 const NebulaField: React.FC = () => {
-    const nebulae = useMemo(() => [
+  const nebulae = useMemo(() => [
     // ===== 左侧星云 (玩家左边) =====
     { position: [-80, 120, 50] as [number, number, number], scale: 90, color1: '#ff00aa', color2: '#aa00ff', opacity: 0.25 },
     { position: [-120, 150, -60] as [number, number, number], scale: 100, color1: '#00ddff', color2: '#00ffdd', opacity: 0.22 },
-    
+
     // ===== 右侧星云 (玩家右边) =====
     { position: [80, 120, 80] as [number, number, number], scale: 90, color1: '#00aaff', color2: '#00ffaa', opacity: 0.25 },
     { position: [120, 150, -20] as [number, number, number], scale: 100, color1: '#0088ff', color2: '#aa00ff', opacity: 0.22 },
-    
+
     // ===== 前方星云 (正前方远景) =====
     { position: [0, 160, -200] as [number, number, number], scale: 200, color1: '#ff3388', color2: '#8833ff', opacity: 0.23 },
     { position: [-50, 140, -200] as [number, number, number], scale: 120, color1: '#ffaa00', color2: '#ff6600', opacity: 0.18 },
@@ -760,134 +762,134 @@ const AbyssParticleStream: React.FC<{
   particleType?: 'cube' | 'digit' | 'dot';
   density?: number;
   outwardBend?: number; // 新增：向外弯曲强度（模拟能量向太空泄漏）
-}> = ({ 
-  position, 
-  radius = 8.0, 
-  height = 60, 
+}> = ({
+  position,
+  radius = 8.0,
+  height = 60,
   color = '#00ffff',
   count = 40,
   particleType = 'cube',
   density = 1.0,
   outwardBend = 0.0
 }) => {
-  const meshRef = useRef<THREE.InstancedMesh>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  
-  // 实际粒子数量根据密度调整
-  const actualCount = Math.floor(count * density);
-  
-  // 生成粒子初始数据 - 使用更自然的分布
-  const particles = useMemo(() => {
-    const arr = [];
-    for (let i = 0; i < actualCount; i++) {
-      // 使用平方根分布让粒子在半径内更均匀
-      const angle = Math.random() * Math.PI * 2;
-      const r = Math.sqrt(Math.random()) * radius;
-      const x = Math.cos(angle) * r;
-      const z = Math.sin(angle) * r;
-      
-      // 初始高度分布在整个范围内
-      const initialY = Math.random() * height - height / 2;
-      
-      // 上升速度 - 缓慢而优雅
-      const speed = 1.5 + Math.random() * 2.5;
-      
-      // 粒子大小 - 小巧精致
-      const size = 0.15 + Math.random() * 0.25;
-      
-      // 相位偏移，用于摇摆动画
-      const phase = Math.random() * Math.PI * 2;
-      const phaseY = Math.random() * Math.PI * 2;
-      
-      // 摇摆幅度
-      const wobbleAmplitude = 0.3 + Math.random() * 0.5;
-      
-      // 亮度变化
-      const brightness = 0.5 + Math.random() * 0.5;
-      
-      // 数字类型 (0 或 1)
-      const digitType = Math.random() > 0.5 ? 1 : 0;
-      
-      arr.push({ 
-        x, z, initialY, speed, size, phase, phaseY,
-        wobbleAmplitude, brightness, digitType 
+    const meshRef = useRef<THREE.InstancedMesh>(null);
+    const dummy = useMemo(() => new THREE.Object3D(), []);
+
+    // 实际粒子数量根据密度调整
+    const actualCount = Math.floor(count * density);
+
+    // 生成粒子初始数据 - 使用更自然的分布
+    const particles = useMemo(() => {
+      const arr = [];
+      for (let i = 0; i < actualCount; i++) {
+        // 使用平方根分布让粒子在半径内更均匀
+        const angle = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.random()) * radius;
+        const x = Math.cos(angle) * r;
+        const z = Math.sin(angle) * r;
+
+        // 初始高度分布在整个范围内
+        const initialY = Math.random() * height - height / 2;
+
+        // 上升速度 - 缓慢而优雅
+        const speed = 1.5 + Math.random() * 2.5;
+
+        // 粒子大小 - 小巧精致
+        const size = 0.15 + Math.random() * 0.25;
+
+        // 相位偏移，用于摇摆动画
+        const phase = Math.random() * Math.PI * 2;
+        const phaseY = Math.random() * Math.PI * 2;
+
+        // 摇摆幅度
+        const wobbleAmplitude = 0.3 + Math.random() * 0.5;
+
+        // 亮度变化
+        const brightness = 0.5 + Math.random() * 0.5;
+
+        // 数字类型 (0 或 1)
+        const digitType = Math.random() > 0.5 ? 1 : 0;
+
+        arr.push({
+          x, z, initialY, speed, size, phase, phaseY,
+          wobbleAmplitude, brightness, digitType
+        });
+      }
+      return arr;
+    }, [actualCount, radius, height]);
+
+    // 颜色
+    const colorObj = useMemo(() => new THREE.Color(color), [color]);
+
+    useFrame((state) => {
+      if (!meshRef.current) return;
+
+      const time = state.clock.elapsedTime;
+
+      particles.forEach((p, i) => {
+        // 计算当前Y位置 - 循环上升
+        let y = ((p.initialY + time * p.speed) % height);
+        if (y > height / 2) y -= height;
+        if (y < -height / 2) y += height;
+
+        // 优雅的摇摆运动 - 像气泡一样
+        const wobbleX = Math.sin(time * 0.8 + p.phase) * p.wobbleAmplitude;
+        const wobbleZ = Math.cos(time * 0.6 + p.phaseY) * p.wobbleAmplitude * 0.8;
+
+        // 计算向外弯曲效果 - 粒子越高，向外偏移越大
+        const heightProgress = (y + height / 2) / height; // 0 到 1
+        const bendFactor = heightProgress * heightProgress * outwardBend;
+
+        // 从粒子源点向外的方向
+        const outwardX = p.x * bendFactor;
+        const outwardZ = p.z * bendFactor;
+
+        // 轻微的旋转
+        const rotY = time * 0.5 + p.phase;
+        const rotX = Math.sin(time * 0.3 + p.phase) * 0.2;
+
+        dummy.position.set(
+          position[0] + p.x + wobbleX + outwardX,
+          position[1] + y,
+          position[2] + p.z + wobbleZ + outwardZ
+        );
+
+        dummy.rotation.set(rotX, rotY, 0);
+        dummy.scale.setScalar(p.size);
+        dummy.updateMatrix();
+        meshRef.current!.setMatrixAt(i, dummy.matrix);
       });
-    }
-    return arr;
-  }, [actualCount, radius, height]);
-  
-  // 颜色
-  const colorObj = useMemo(() => new THREE.Color(color), [color]);
-  
-  useFrame((state) => {
-    if (!meshRef.current) return;
-    
-    const time = state.clock.elapsedTime;
-    
-    particles.forEach((p, i) => {
-      // 计算当前Y位置 - 循环上升
-      let y = ((p.initialY + time * p.speed) % height);
-      if (y > height / 2) y -= height;
-      if (y < -height / 2) y += height;
-      
-      // 优雅的摇摆运动 - 像气泡一样
-      const wobbleX = Math.sin(time * 0.8 + p.phase) * p.wobbleAmplitude;
-      const wobbleZ = Math.cos(time * 0.6 + p.phaseY) * p.wobbleAmplitude * 0.8;
-      
-      // 计算向外弯曲效果 - 粒子越高，向外偏移越大
-      const heightProgress = (y + height / 2) / height; // 0 到 1
-      const bendFactor = heightProgress * heightProgress * outwardBend;
-      
-      // 从粒子源点向外的方向
-      const outwardX = p.x * bendFactor;
-      const outwardZ = p.z * bendFactor;
-      
-      // 轻微的旋转
-      const rotY = time * 0.5 + p.phase;
-      const rotX = Math.sin(time * 0.3 + p.phase) * 0.2;
-      
-      dummy.position.set(
-        position[0] + p.x + wobbleX + outwardX,
-        position[1] + y,
-        position[2] + p.z + wobbleZ + outwardZ
-      );
-      
-      dummy.rotation.set(rotX, rotY, 0);
-      dummy.scale.setScalar(p.size);
-      dummy.updateMatrix();
-      meshRef.current!.setMatrixAt(i, dummy.matrix);
+
+      meshRef.current.instanceMatrix.needsUpdate = true;
     });
-    
-    meshRef.current.instanceMatrix.needsUpdate = true;
-  });
-  
-  // 根据粒子类型选择几何体
-  const geometry = useMemo(() => {
-    switch (particleType) {
-      case 'cube':
-        return <boxGeometry args={[1, 1, 1]} />;
-      case 'dot':
-        return <sphereGeometry args={[0.5, 6, 6]} />;
-      case 'digit':
-      default:
-        return <planeGeometry args={[1, 1]} />;
-    }
-  }, [particleType]);
-  
-  return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, actualCount]}>
-      {geometry}
-      <meshBasicMaterial 
-        color={colorObj}
-        transparent
-        opacity={0.7}
-        blending={THREE.AdditiveBlending}
-        depthWrite={false}
-        side={THREE.DoubleSide}
-      />
-    </instancedMesh>
-  );
-};
+
+    // 根据粒子类型选择几何体
+    const geometry = useMemo(() => {
+      switch (particleType) {
+        case 'cube':
+          return <boxGeometry args={[1, 1, 1]} />;
+        case 'dot':
+          return <sphereGeometry args={[0.5, 6, 6]} />;
+        case 'digit':
+        default:
+          return <planeGeometry args={[1, 1]} />;
+      }
+    }, [particleType]);
+
+    return (
+      <instancedMesh ref={meshRef} args={[undefined, undefined, actualCount]}>
+        {geometry}
+        <meshBasicMaterial
+          color={colorObj}
+          transparent
+          opacity={0.7}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </instancedMesh>
+    );
+  };
 
 // --- 全局飘浮粒子 (Ambient Floating Particles) ---
 // 覆盖整个场景的稀疏粒子，营造空气感
@@ -895,72 +897,72 @@ const AmbientParticles: React.FC<{
   count?: number;
   spread?: [number, number, number];
   color?: string;
-}> = ({ 
-  count = 200, 
+}> = ({
+  count = 200,
   spread = [80, 40, 100],
   color = '#00ffff'
 }) => {
-  const meshRef = useRef<THREE.InstancedMesh>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  
-  // 生成环境粒子
-  const particles = useMemo(() => {
-    const arr = [];
-    for (let i = 0; i < count; i++) {
-      // 在整个空间中随机分布
-      const x = (Math.random() - 0.5) * spread[0];
-      const y = (Math.random() - 0.5) * spread[1];
-      const z = -Math.random() * spread[2] - 5; // 主要在前方
-      
-      const speed = 0.3 + Math.random() * 0.8;
-      const size = 0.05 + Math.random() * 0.1;
-      const phase = Math.random() * Math.PI * 2;
-      const phaseY = Math.random() * Math.PI * 2;
-      const wobbleAmp = 0.5 + Math.random() * 1.0;
-      
-      arr.push({ x, y, z, speed, size, phase, phaseY, wobbleAmp });
-    }
-    return arr;
-  }, [count, spread]);
-  
-  const colorObj = useMemo(() => new THREE.Color(color), [color]);
-  
-  useFrame((state) => {
-    if (!meshRef.current) return;
-    
-    const time = state.clock.elapsedTime;
-    
-    particles.forEach((p, i) => {
-      // 缓慢上升
-      let y = p.y + (time * p.speed) % spread[1];
-      if (y > spread[1] / 2) y -= spread[1];
-      
-      // 轻微飘动
-      const wobbleX = Math.sin(time * 0.5 + p.phase) * p.wobbleAmp;
-      const wobbleZ = Math.cos(time * 0.4 + p.phaseY) * p.wobbleAmp * 0.6;
-      
-      dummy.position.set(p.x + wobbleX, y, p.z + wobbleZ);
-      dummy.scale.setScalar(p.size);
-      dummy.updateMatrix();
-      meshRef.current!.setMatrixAt(i, dummy.matrix);
+    const meshRef = useRef<THREE.InstancedMesh>(null);
+    const dummy = useMemo(() => new THREE.Object3D(), []);
+
+    // 生成环境粒子
+    const particles = useMemo(() => {
+      const arr = [];
+      for (let i = 0; i < count; i++) {
+        // 在整个空间中随机分布
+        const x = (Math.random() - 0.5) * spread[0];
+        const y = (Math.random() - 0.5) * spread[1];
+        const z = -Math.random() * spread[2] - 5; // 主要在前方
+
+        const speed = 0.3 + Math.random() * 0.8;
+        const size = 0.05 + Math.random() * 0.1;
+        const phase = Math.random() * Math.PI * 2;
+        const phaseY = Math.random() * Math.PI * 2;
+        const wobbleAmp = 0.5 + Math.random() * 1.0;
+
+        arr.push({ x, y, z, speed, size, phase, phaseY, wobbleAmp });
+      }
+      return arr;
+    }, [count, spread]);
+
+    const colorObj = useMemo(() => new THREE.Color(color), [color]);
+
+    useFrame((state) => {
+      if (!meshRef.current) return;
+
+      const time = state.clock.elapsedTime;
+
+      particles.forEach((p, i) => {
+        // 缓慢上升
+        let y = p.y + (time * p.speed) % spread[1];
+        if (y > spread[1] / 2) y -= spread[1];
+
+        // 轻微飘动
+        const wobbleX = Math.sin(time * 0.5 + p.phase) * p.wobbleAmp;
+        const wobbleZ = Math.cos(time * 0.4 + p.phaseY) * p.wobbleAmp * 0.6;
+
+        dummy.position.set(p.x + wobbleX, y, p.z + wobbleZ);
+        dummy.scale.setScalar(p.size);
+        dummy.updateMatrix();
+        meshRef.current!.setMatrixAt(i, dummy.matrix);
+      });
+
+      meshRef.current.instanceMatrix.needsUpdate = true;
     });
-    
-    meshRef.current.instanceMatrix.needsUpdate = true;
-  });
-  
-  return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, count]}>
-      <sphereGeometry args={[1, 4, 4]} />
-      <meshBasicMaterial 
-        color={colorObj}
-        transparent
-        opacity={0.4}
-        blending={THREE.AdditiveBlending}
-        depthWrite={false}
-      />
-    </instancedMesh>
-  );
-};
+
+    return (
+      <instancedMesh ref={meshRef} args={[undefined, undefined, count]}>
+        <sphereGeometry args={[1, 4, 4]} />
+        <meshBasicMaterial
+          color={colorObj}
+          transparent
+          opacity={0.4}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </instancedMesh>
+    );
+  };
 
 // --- 检查点区域增强粒子 ---
 // 在关键位置（检查点、平台）附近有更密集的粒子
@@ -981,7 +983,7 @@ const CheckpointGlow: React.FC<{
         density={1.5}
         outwardBend={0.3}
       />
-      
+
     </group>
   );
 };
@@ -1004,19 +1006,19 @@ const CrackEnergyStreams: React.FC = () => {
       count: number;
       outwardBend: number;
     }> = [];
-    
+
     PLANET_CRACKS.forEach(crack => {
       // 沿每条裂缝放置2-3个能量流源点
       const crackLength = crack.zStart - crack.zEnd;
       const numStreams = Math.floor(crackLength / 20) + 1;
-      
+
       for (let i = 0; i < numStreams; i++) {
         const t = i / Math.max(numStreams - 1, 1);
         const z = crack.zStart - t * crackLength;
-        
+
         // 裂缝路径带有蜿蜒效果
         const x = crack.xOffset + Math.sin(z * 0.3 + crack.xOffset) * 2.0;
-        
+
         result.push({
           position: [x, -0.5, z] as [number, number, number],
           radius: crack.width * 2 + 1,
@@ -1026,10 +1028,10 @@ const CrackEnergyStreams: React.FC = () => {
         });
       }
     });
-    
+
     return result;
   }, []);
-  
+
   return (
     <>
       {/* 裂缝能量流 - 从裂缝中喷射向太空 */}
@@ -1045,12 +1047,12 @@ const CrackEnergyStreams: React.FC = () => {
           outwardBend={stream.outwardBend}
         />
       ))}
-      
+
       {/* 全局环境粒子 - 稀疏的能量尘埃 */}
-      <AmbientParticles 
-        count={100} 
-        spread={[80, 40, 100]} 
-        color="#00ddff" 
+      <AmbientParticles
+        count={100}
+        spread={[80, 40, 100]}
+        color="#00ddff"
       />
     </>
   );
@@ -1070,7 +1072,7 @@ export const GhostWorld: React.FC<GhostWorldProps> = ({ resetToken }) => (
     */}
     <color attach="background" args={['#0a0910']} />
     <fog attach="fog" args={['#151215', 50, 150]} />
-    
+
     {/* <Environment preset="night" /> */}
     <Stars radius={150} depth={80} count={4000} factor={5} saturation={0.2} fade speed={0.3} />
 
@@ -1079,17 +1081,17 @@ export const GhostWorld: React.FC<GhostWorldProps> = ({ resetToken }) => (
 
     {/* 消解星球地表 - 带地平线曲率和发光裂缝 */}
     <PlanetSurface />
-    
+
     {/* 裂缝能量流 - 从裂缝中喷射向太空 */}
     <CrackEnergyStreams />
 
     {/* 光照 - 适配荒芜星球风格 */}
     <ambientLight intensity={0.45} />
-    <directionalLight 
-      position={[10, 25, 8]} 
-      intensity={0.9} 
-      castShadow 
-      shadow-mapSize-width={1024} 
+    <directionalLight
+      position={[10, 25, 8]}
+      intensity={0.9}
+      castShadow
+      shadow-mapSize-width={1024}
       shadow-mapSize-height={1024}
       color="#ffeedd"
     />
@@ -1120,10 +1122,10 @@ export const GhostWorld: React.FC<GhostWorldProps> = ({ resetToken }) => (
         stageId={1}
       />
     ))}
-    
+
     {/* 废墟山脉 - 远景 */}
     <MountainRange />
-    
+
     {/* 终点信标 */}
     <GoalBeacon position={[0, 2, -44]} />
   </>

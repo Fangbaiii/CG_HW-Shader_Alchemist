@@ -1,7 +1,7 @@
 import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { GunType, GUN_CONFIGS } from '../types';
+import { GunType, GUN_CONFIGS } from '@/types';
 import { MeshWobbleMaterial } from '@react-three/drei';
 
 interface GunModelProps {

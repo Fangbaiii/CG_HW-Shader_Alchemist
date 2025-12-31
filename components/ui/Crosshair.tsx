@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { shaderMaterial } from '@react-three/drei';
 import { extend } from '@react-three/fiber';
-import { GunType } from '../types';
+import { GunType } from '@/types';
 
 // Define the shader material
 const CrosshairShaderMaterial = shaderMaterial(
@@ -183,7 +183,7 @@ export const Crosshair: React.FC<CrosshairProps> = ({ currentGun, isShooting, is
 
   useEffect(() => {
     if (isShooting) {
-        shootAnim.current = 1.0;
+      shootAnim.current = 1.0;
     }
   }, [isShooting]);
 
@@ -192,7 +192,7 @@ export const Crosshair: React.FC<CrosshairProps> = ({ currentGun, isShooting, is
       materialRef.current.uTime = state.clock.elapsedTime;
       materialRef.current.uType = typeInt;
       materialRef.current.uHover = THREE.MathUtils.lerp(materialRef.current.uHover, isHovering ? 1.0 : 0.0, delta * 10);
-      
+
       // Decay shoot animation
       shootAnim.current = THREE.MathUtils.lerp(shootAnim.current, 0, delta * 5);
       materialRef.current.uShoot = shootAnim.current;
