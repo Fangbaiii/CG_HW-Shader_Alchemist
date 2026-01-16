@@ -61,5 +61,14 @@ void main() {
   float emissiveBoost = smoothstep(0.6, 0.95, mixFactor) * 0.20;
   baseColor *= 1.0 + emissiveBoost;
 
+  // === Edge fog: fade to fog color at distant edges ===
+  // 边缘雾化：仅在远处边缘淡出到雾色，不影响近景
+  vec3 fogColor = vec3(0.29, 0.07, 0.03); // #4a1208 深红褐色雾
+  float horizontalDist = length(vWorldPosition.xz); // 水平距离（忽略高度）
+  float fogStart = 30.0;  // 开始雾化的距离
+  float fogEnd = 100.0;   // 完全雾化的距离
+  float fogFactor = smoothstep(fogStart, fogEnd, horizontalDist);
+  baseColor = mix(baseColor, fogColor, fogFactor);
+
   gl_FragColor = vec4(baseColor, 1.0);
 }

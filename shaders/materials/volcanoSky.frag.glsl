@@ -20,8 +20,14 @@ void main() {
   // Mix colors based on height
   vec3 skyColor;
   if (height < 0.3) {
-    // Below horizon - glow from lava
-    skyColor = mix(vec3(0.6, 0.15, 0.02), horizonColor, height / 0.3);
+    // Below horizon - glow from lava with fog blending
+    vec3 fogColor = vec3(0.29, 0.07, 0.03); // #4a1208 与岩浆雾色一致
+    vec3 glowColor = vec3(0.6, 0.15, 0.02);
+    vec3 blendedColor = mix(glowColor, horizonColor, height / 0.3);
+    
+    // 添加额外的雾色混合，越接近底部雾色越重
+    float fogBlend = smoothstep(0.3, 0.0, height);
+    skyColor = mix(blendedColor, fogColor, fogBlend * 0.6);
   } else if (height < 0.6) {
     skyColor = mix(horizonColor, midColor, (height - 0.3) / 0.3);
   } else {

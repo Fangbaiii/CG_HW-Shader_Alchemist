@@ -48,14 +48,25 @@ export const JellyBullet: React.FC<JellyBulletProps> = ({ position, direction, o
     // Intersect with everything in the scene
     const intersects = raycaster.intersectObjects(scene.children, true);
 
-    // Filter intersects - CRITICAL: Exclude gun model, crosshair, and UI elements
+    // Filter intersects - CRITICAL: Exclude gun model, crosshair, UI elements, and decoration models
     const hit = intersects.find(i => {
       // Ignore the bullet itself
       if (i.object === ref.current) return false;
 
-      // Ignore gun model and crosshair (they don't have collision-relevant userData)
-      // Only accept objects that have game-relevant userData
+      // Check if any ancestor is a decoration (GLB models loaded via ModelLoader)
       let target: THREE.Object3D | null = i.object;
+      while (target) {
+        const userData = target.userData;
+
+        // Skip decoration objects (fire mountains, monsters, etc.)
+        if (userData && (userData.isDecoration || userData.ignoreRaycast)) {
+          return false;
+        }
+        target = target.parent;
+      }
+
+      // Now check if it's a valid game object
+      target = i.object;
       while (target) {
         const userData = target.userData;
         // Accept if it's interactive, a platform, lava, or has safe surface

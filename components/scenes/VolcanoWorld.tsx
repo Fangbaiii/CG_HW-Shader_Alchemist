@@ -3,6 +3,8 @@ import { Environment, Sparkles, SoftShadows } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { LabObject } from '@/components/entities/LabObject';
+import { ModelLoader } from '@/components/entities/ModelLoader';
+import { FloatingModel } from '@/components/entities/FloatingModel';
 import { Signboard } from '@/components/ui/Signboard';
 import { LavaMaterial, VolcanoSkyMaterial, ObsidianMaterial, VolcanoWithLavaMaterial } from '@/components/materials';
 
@@ -77,7 +79,7 @@ const Platform = ({
 const LavaPlane: React.FC = () => {
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -3, -20]} receiveShadow userData={{ isLava: true }}>
-      <planeGeometry args={[150, 150, 64, 64]} />
+      <planeGeometry args={[300, 300, 64, 64]} />
       <LavaMaterial />
     </mesh>
   );
@@ -93,75 +95,16 @@ const VolcanoSky: React.FC = () => {
   );
 };
 
-// --- 活火山 (Low Poly 风格) ---
-// 使用 LatheGeometry 创建连续曲线山体，配合顶点随机偏移产生岩石质感
-// 岩浆流现在直接在 Shader 中程序化绘制，无需额外几何体
-const ActiveVolcano = ({
-  position,
-  scale = 1,
-  rotation = 0,
-}: {
-  position: [number, number, number];
-  scale?: number;
-  rotation?: number;
-}) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-
-  // 火山形状参数
-  const volcanoHeight = 20;
-  const topRadius = 3;      // 平顶的半径
-  const bottomRadius = 25;  // 底部的半径
-  const segments = 10;      // 垂直分段数
-
-  // 1. 生成火山的主体轮廓点 (用于 LatheGeometry)
-  const lathePoints = useMemo(() => {
-    const points: THREE.Vector2[] = [];
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments; // 0 到 1
-      const y = t * volcanoHeight;
-      const radius = topRadius + (bottomRadius - topRadius) * Math.pow(1 - t, 2.5);
-      points.push(new THREE.Vector2(radius, y));
-    }
-    return points;
-  }, []);
-
-  // 2. 移除 JS 端顶点随机位移，防止模型接缝撕裂
-  // 如果需要崎岖感，后续将在顶点 Shader 中实现
-  // useLayoutEffect 已移除以修复闭合问题
-
-  return (
-    <group position={position} rotation={[0, rotation, 0]} scale={scale}>
-      {/* 主火山体 - 使用统一 Shader（包含岩浆流和裂缝） */}
-      {/* radialSegments=9 制造九边形风格，看起来像玄武岩柱 */}
-      <mesh ref={meshRef} position={[0, -2, 0]}>
-        <latheGeometry args={[lathePoints, 9]} />
-        <VolcanoWithLavaMaterial />
-      </mesh>
-
-      {/* 顶部岩浆湖盖子 */}
-      <mesh position={[0, volcanoHeight - 2.5, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[topRadius - 1, 16]} />
-        <meshBasicMaterial color="#ff3300" />
-      </mesh>
-
-      {/* 顶部强烈的光晕 */}
-      <pointLight position={[0, volcanoHeight, 0]} color="#ff4400" intensity={5} distance={50} decay={2} />
-
-      {/* 底部辉光（被岩浆照亮的感觉） */}
-      <pointLight position={[0, 2, 0]} color="#ffaa00" intensity={2} distance={20} />
-    </group>
-  );
-};
 
 // --- 悬浮巨石 (Instanced for performance) ---
 // Configuration data for all floating rocks
 const FLOATING_ROCKS_DATA = [
-  { position: [-12, 6, -25] as [number, number, number], size: 2.5, rotationSpeed: 1 },
-  { position: [15, 8, -35] as [number, number, number], size: 3, rotationSpeed: 1.2 },
-  { position: [-8, 10, -45] as [number, number, number], size: 2, rotationSpeed: 0.8 },
-  { position: [10, 4, -15] as [number, number, number], size: 1.8, rotationSpeed: 1.1 },
-  { position: [-18, 7, -55] as [number, number, number], size: 2.8, rotationSpeed: 1.5 },
-  { position: [20, 12, -50] as [number, number, number], size: 3.5, rotationSpeed: 1.3 },
+  { position: [-20, 16, -25] as [number, number, number], size: 2.5, rotationSpeed: 1 },
+  { position: [20, 16, -25] as [number, number, number], size: 3, rotationSpeed: 1.2 },
+  { position: [-12, 20, -45] as [number, number, number], size: 2, rotationSpeed: 0.8 },
+  { position: [12, 20, -45] as [number, number, number], size: 1.8, rotationSpeed: 1.1 },
+  { position: [-26, 14, -55] as [number, number, number], size: 2.8, rotationSpeed: 1.5 },
+  { position: [26, 14, -55] as [number, number, number], size: 3.5, rotationSpeed: 1.3 },
 ];
 
 /**
@@ -258,8 +201,10 @@ export interface VolcanoWorldProps {
 
 export const VolcanoWorld: React.FC<VolcanoWorldProps> = ({ resetToken }) => (
   <>
-    {/* 移除纯色背景，使用程序化天空 */}
-    <fog attach="fog" args={['#1a0805', 20, 100]} />
+    {/* 全局雾气已移除，现在使用 Shader 中的边界局部雾化 */}
+    {/* 岩浆材质：在远处 (80-150米) 淡出到雾色 */}
+    {/* 天空材质：底部柔和混合雾色 */}
+    {/* <fogExp2 attach="fog" args={['#4a1208', 0.01]} /> */}
 
     {/* 
        Level 1: 熔岩火山 (Volcanic Lava)
@@ -289,9 +234,9 @@ export const VolcanoWorld: React.FC<VolcanoWorldProps> = ({ resetToken }) => (
     <Sparkles
       count={100}
       scale={[40, 25, 60]}
-      size={5}
+      size={10}
       speed={0.6}
-      opacity={0.6}
+      opacity={0.9}
       color="#ff6600"
       position={[0, 8, -20]}
     />
@@ -300,33 +245,195 @@ export const VolcanoWorld: React.FC<VolcanoWorldProps> = ({ resetToken }) => (
       count={150}
       scale={[30, 15, 50]}
       size={3}
-      speed={0.3}
-      opacity={0.4}
+      speed={1.5}
+      opacity={0.7}
       color="#ffaa00"
       position={[0, 3, -15]}
     />
 
     {/* 光照系统 */}
-    <ambientLight intensity={0.4} color="#ff9966" />
+    <ambientLight intensity={0.8} color="#ff9966" />
     <directionalLight
       position={[12, 18, 4]}
-      intensity={1.0}
+      intensity={0.01}
       color="#ffaa77"
       castShadow
       shadow-mapSize-width={1024}
       shadow-mapSize-height={1024}
     />
     {/* 来自岩浆的底部光照 - 核心氛围光 */}
-    <pointLight position={[0, -2, -20]} intensity={4.0} color="#ff4400" distance={80} decay={1} />
-    <pointLight position={[-15, -2, -30]} intensity={2.5} color="#ff3300" distance={50} decay={2} />
-    <pointLight position={[15, -2, -10]} intensity={2.5} color="#ff5500" distance={50} decay={2} />
+    <pointLight position={[0, -2, -20]} intensity={0.2} color="#ff4400" distance={80} decay={1} />
+    <pointLight position={[-15, -2, -30]} intensity={0.2} color="#ff3300" distance={50} decay={2} />
+    <pointLight position={[15, -2, -10]} intensity={0.2} color="#ff5500" distance={50} decay={2} />
 
     {/* === 活火山 - 带有岩浆河流和裂缝发光 === */}
-    <ActiveVolcano position={[-65, -2, -75]} scale={1.3} rotation={0.3} />
-    <ActiveVolcano position={[75, -10, -85]} scale={1.5} rotation={-0.2} />
-    <ActiveVolcano position={[0, -12, -110]} scale={1.8} rotation={0} />
-    <ActiveVolcano position={[-85, -7, -35]} scale={1.0} rotation={0.8} />
-    <ActiveVolcano position={[90, -9, -45]} scale={1.1} rotation={-0.6} />
+    {/* 原有的程序化火山已注释 */}
+    {/* <ActiveVolcano position={[-65, -2, -75]} scale={1.3} rotation={0.3} /> */}
+    {/* <ActiveVolcano position={[75, -10, -85]} scale={1.5} rotation={-0.2} /> */}
+    {/* <ActiveVolcano position={[0, -12, -110]} scale={1.8} rotation={0} /> */}
+    {/* <ActiveVolcano position={[-85, -7, -35]} scale={1.0} rotation={0.8} /> */}
+    {/* <ActiveVolcano position={[90, -9, -45]} scale={1.1} rotation={-0.6} /> */}
+
+
+    {/* === 外部 GLB 模型火山 === */}
+    {/* 左前方火山 */}
+    <ModelLoader
+      path="/models/Volcano.glb"
+      position={[-40, 5, -20]}
+      scale={25}
+      rotation={[0, 1, 0]}
+    />
+
+    {/* 右前方火山 */}
+    <ModelLoader
+      path="/models/Volcano.glb"
+      position={[30, 0, -20]}
+      scale={[20, 10, 20]}
+      rotation={[0, -1, 0]}
+    />
+
+    <ModelLoader
+      path="/models/Volcano.glb"
+      position={[70, 2, 20]}
+      scale={28}
+      rotation={[0, -0.4, 0]}
+    />
+    <ModelLoader
+      path="/models/Volcano2.glb"
+      position={[-20, -2, 20]}
+      scale={0.1}
+      rotation={[0, 2, 0]}
+    />
+    <ModelLoader
+      path="/models/Volcano2.glb"
+      position={[50, -5, -90]}
+      scale={0.2}
+      rotation={[0, 0.5, 0]}
+    />
+
+    {/* === 怪兽系统 === */}
+
+    {/* 大BOSS：骷髅王 - 放在远处中央 */}
+    <group position={[0, -5, -100]}>
+      <ModelLoader
+        path="/models/Skeleton.glb"
+        scale={50}
+        rotation={[0, 0, 0]}
+      />
+      {/* BOSS 红色光环 */}
+      <pointLight color="#ff0000" intensity={4} distance={20} decay={2} />
+      {/* BOSS 周围的火焰粒子 */}
+      <Sparkles
+        count={80}
+        scale={8}
+        size={8}
+        speed={0.4}
+        opacity={1.0}
+        color="#ff3300"
+      />
+    </group>
+
+    {/* 小恶魔群 - 分布在场景各处 */}
+
+    {/* 左前方巡逻恶魔 - 放在左侧明显位置 */}
+    <group position={[-20, 5, -18]}>
+      <FloatingModel
+        path="/models/Demon.glb"
+        position={[0, 0, 0]}
+        scale={2}
+        rotation={[0, 0.8, 0]}
+        floatAmplitude={0.6}
+        floatSpeed={1.2}
+        rotationSpeed={0.4}
+      />
+      <pointLight color="#ff4400" intensity={1.5} distance={8} />
+    </group>
+
+    {/* 右前方巡逻恶魔 - 放在右侧明显位置 */}
+    <group position={[20, 5, -18]}>
+      <FloatingModel
+        path="/models/Demon.glb"
+        position={[0, 0, 0]}
+        scale={2.2}
+        rotation={[0, -0.6, 0]}
+        floatAmplitude={0.7}
+        floatSpeed={1.0}
+        rotationSpeed={0.35}
+      />
+      <pointLight color="#ff4400" intensity={1.5} distance={8} />
+    </group>
+
+    {/* 左侧高空哨兵 */}
+    <FloatingModel
+      path="/models/Demon.glb"
+      position={[-30, 12, -30]}
+      scale={1.8}
+      rotation={[0, 1.2, 0]}
+      floatAmplitude={0.8}
+      floatSpeed={0.8}
+      rotationSpeed={0.5}
+    />
+
+    {/* 右侧高空哨兵 */}
+    <FloatingModel
+      path="/models/Demon.glb"
+      position={[30, 12, -30]}
+      scale={1.9}
+      rotation={[0, -1.0, 0]}
+      floatAmplitude={0.75}
+      floatSpeed={0.9}
+      rotationSpeed={0.45}
+    />
+
+    {/* 远处左翼守卫 */}
+    <FloatingModel
+      path="/models/Demon.glb"
+      position={[-35, 8, -55]}
+      scale={2.5}
+      rotation={[0, 0.5, 0]}
+      floatAmplitude={0.5}
+      floatSpeed={1.1}
+      rotationSpeed={0.3}
+    />
+
+    {/* 远处右翼守卫 */}
+    <FloatingModel
+      path="/models/Demon.glb"
+      position={[38, 9, -58]}
+      scale={2.4}
+      rotation={[0, -0.7, 0]}
+      floatAmplitude={0.55}
+      floatSpeed={1.15}
+      rotationSpeed={0.32}
+    />
+
+    {/* BOSS 两侧的精英守卫 */}
+    <group position={[-30, 8, -75]}>
+      <FloatingModel
+        path="/models/Demon_big.glb"
+        position={[0, 0, 0]}
+        scale={6.0}
+        rotation={[0, 0.3, 0]}
+        floatAmplitude={0.4}
+        floatSpeed={0.7}
+        rotationSpeed={0.25}
+      />
+      <pointLight color="#ff3300" intensity={2} distance={10} />
+    </group>
+
+    <group position={[30, 8, -75]}>
+      <FloatingModel
+        path="/models/Demon_big.glb"
+        position={[0, 0, 0]}
+        scale={6.0}
+        rotation={[0, -0.3, 0]}
+        floatAmplitude={0.4}
+        floatSpeed={0.75}
+        rotationSpeed={0.28}
+      />
+      <pointLight color="#ff3300" intensity={2} distance={10} />
+    </group>
+
 
     {/* === 悬浮巨石 (Instanced for performance) === */}
     <FloatingRocksInstanced />
@@ -334,8 +441,9 @@ export const VolcanoWorld: React.FC<VolcanoWorldProps> = ({ resetToken }) => (
     {/* === 游戏场景 === */}
     <Platform position={[0, -0.25, 8]} size={[10, 0.5, 10]} safe interactive />
     <Signboard
-      position={[0, 5, 2]}
-      rotation={[0.4, 0, 0]}
+      position={[0, 4.5, 1]}
+      rotation={[0.2, 0, 0]}
+      scale={2}
       title="炼金术士试炼"
       content={[
         "欢迎来到模拟训练场。",
@@ -358,6 +466,6 @@ export const VolcanoWorld: React.FC<VolcanoWorldProps> = ({ resetToken }) => (
     {LAVA_COLUMNS.map((data, index) => (
       <LabObject key={`column-${index}`} position={data.position} size={data.size} resetToken={resetToken} />
     ))}
-    <GoalBeacon position={[0, 9, -68]} />
+    <GoalBeacon position={[0, 15, -68]} />
   </>
 );
