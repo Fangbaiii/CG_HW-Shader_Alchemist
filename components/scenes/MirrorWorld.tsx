@@ -112,45 +112,73 @@ const PulseRings = ({ position, color, active }: { position: THREE.Vector3 | [nu
     );
 };
 
-// --- Dynamic Background ---
-const CyberBackground = React.memo(({ themeColor }: { themeColor: string }) => {
-    const buildings = useMemo(() => {
-        return Array.from({ length: 40 }).map((_, i) => {
-            const angle = (i / 40) * Math.PI * 2;
-            const radius = 40 + Math.random() * 20;
+// --- Optical Matrix Background ---
+const OpticalMatrixBackground = React.memo(({ intensity, activeColor }: { intensity: number, activeColor: string }) => {
+    // 1. Vertical Energy Pillars (Data Streams)
+    const pillars = useMemo(() => {
+        return Array.from({ length: 30 }).map((_, i) => {
+            const angle = (i / 30) * Math.PI * 2;
+            const radius = 60 + Math.random() * 40; // Far background
             const x = Math.cos(angle) * radius;
             const z = Math.sin(angle) * radius;
-            const h = 10 + Math.random() * 40;
-            const emissiveColor = Math.random() > 0.5 ? "#ff00ff" : themeColor;
-            return { x, z, h, emissiveColor };
+            const h = 50 + Math.random() * 100;
+            return { x, z, h, speed: 0.2 + Math.random() * 0.5 };
         });
-    }, [themeColor]); // Re-generate if theme changes drastically or just use prop for rendering? 
-    // Re-generating 40 meshes is cheap.
+    }, []);
+
+    const groupRef = React.useRef<THREE.Group>(null);
+    useFrame((state) => {
+        if (!groupRef.current) return;
+        // Subtle rotation of the whole world matrix
+        groupRef.current.rotation.y = state.clock.elapsedTime * 0.02 * (1 + intensity);
+    });
 
     return (
-        <group>
-            <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-            <Sparkles count={300} scale={[100, 50, 100]} size={6} speed={0.4} opacity={0.5} color={themeColor} />
+        <group ref={groupRef}>
+            <Stars radius={150} depth={50} count={3000} factor={4} saturation={0} fade speed={0.5} />
+            
+            {/* Ambient Sparkles - reacting to intensity */}
+            <Sparkles 
+                count={500} 
+                scale={[120, 80, 120]} 
+                size={4 + intensity * 4} 
+                speed={0.2 + intensity} 
+                opacity={0.4} 
+                color={activeColor} 
+            />
 
-            {/* Distant Cityscape - Procedural Buildings */}
-            {buildings.map((b, i) => (
-                <mesh key={i} position={[b.x, b.h / 2 - 20, b.z]}>
-                    <boxGeometry args={[3, b.h, 3]} />
-                    <meshStandardMaterial
-                        color="#000000"
-                        emissive={b.emissiveColor}
-                        emissiveIntensity={0.5}
+            {/* Vertical Energy Pillars */}
+            {pillars.map((p, i) => (
+                <mesh key={i} position={[p.x, 0, p.z]}>
+                    <cylinderGeometry args={[0.2, 0.2, p.h, 8]} />
+                    <meshBasicMaterial 
+                        color={activeColor} 
+                        transparent 
+                        opacity={0.3} 
+                        blending={THREE.AdditiveBlending} 
                     />
                 </mesh>
             ))}
 
-            {/* Floating Rings */}
-            <Float speed={2} rotationIntensity={0.5} floatIntensity={1}>
-                <mesh position={[0, 30, -50]} rotation={[Math.PI / 4, 0, 0]}>
-                    <torusGeometry args={[20, 0.5, 16, 100]} />
-                    <meshStandardMaterial color={themeColor} emissive={themeColor} emissiveIntensity={2} />
-                </mesh>
+            {/* Massive Optical Rings - The "Lens" of the world */}
+            <Float speed={1} rotationIntensity={0.2} floatIntensity={0.5}>
+                <group position={[0, 40, -80]} rotation={[Math.PI/3, 0, 0]}>
+                    {/* Ring 1 */}
+                    <mesh rotation={[0, 0, 0]}>
+                        <torusGeometry args={[40, 0.2, 16, 128]} />
+                        <meshStandardMaterial color="#ffffff" emissive={activeColor} emissiveIntensity={1 + intensity} />
+                    </mesh>
+                    {/* Ring 2 - Counter Rotating */}
+                    <mesh rotation={[Math.PI/2, 0, 0]} scale={[0.9, 0.9, 0.9]}>
+                        <torusGeometry args={[40, 0.5, 16, 128]} />
+                        <meshStandardMaterial color="#222" emissive={activeColor} emissiveIntensity={0.5} wireframe />
+                    </mesh>
+                </group>
             </Float>
+
+            {/* Matrix Grid Floor (Ceiling/Floor Illusion) */}
+            <gridHelper args={[300, 60, "#333", "#111"]} position={[0, -50, 0]} />
+            <gridHelper args={[300, 60, "#333", "#111"]} position={[0, 80, 0]} />
         </group>
     );
 });
@@ -242,33 +270,43 @@ export const MirrorWorld: React.FC<MirrorWorldProps> = ({ resetToken }) => {
 
     // --- Active Theme Logic ---
     const activeCount = nodeStates.filter(Boolean).length;
-    // 0: Cyan (Chill), 1: Magenta (Neon), 2: Orange (Danger), 3: Green (Success)
-    const themeColors = ["#00ffff", "#ff00ff", "#ff5500", "#00ff88"];
-    const currentTheme = themeColors[activeCount];
+    // Theme Palette: Purple (Base) -> Blue (Active 1) -> Orange (Active 2) -> Green (Success)
+    // Actually user requested: Green=Reflective, Cyan=Walkable, Purple=Framework, Red=Key.
+    // We will use "Active Color" to drive the background reactivity, while keeping structural colors consistent.
+    // But for "feedback", let's make the 'ActiveColor' shift energy state.
+    const activeColor = useMemo(() => {
+        if (isPuzzleSolved) return "#00ff00"; // Pure Green
+        if (activeCount === 2) return "#ff9900"; // High Energy Orange
+        if (activeCount === 1) return "#00ffff"; // Active Cyan
+        return "#ff00ff"; // Base Magenta/Purple
+    }, [activeCount, isPuzzleSolved]);
+
+    const intensity = activeCount === 3 ? 2.0 : (activeCount * 0.5);
 
     return (
         <>
-            <color attach="background" args={['#000205']} />
-            <fog attach="fog" args={['#000205', 30, 90]} />
+            <color attach="background" args={['#050005']} />
+            <fog attach="fog" args={['#050005', 40, 120]} />
 
             {/* Rich Cyber Atmosphere */}
-            <CyberBackground themeColor={currentTheme} />
+            <OpticalMatrixBackground item={undefined} intensity={intensity} activeColor={activeColor} />
 
-            <ambientLight intensity={0.5} color={currentTheme} />
+            <ambientLight intensity={0.4} color="#8800ff" /> {/* Purple Base Ambient */}
             <directionalLight 
-                position={[6, 14, 2]} 
-                intensity={1.5} 
-                color={activeCount % 2 === 0 ? "#ff00ff" : "#00ffff"} 
+                position={[10, 20, 10]} 
+                intensity={1.0 + intensity} 
+                color={activeColor} 
                 castShadow 
-                shadow-mapSize-width={1024} 
-                shadow-mapSize-height={1024} 
+                shadow-mapSize-width={2048} 
+                shadow-mapSize-height={2048} 
             />
-            <pointLight position={[0, 8, -25]} intensity={2} color={currentTheme} distance={50} />
+            {/* Rim light for definition */}
+            <spotLight position={[-10, 10, -5]} angle={0.5} intensity={5} color="#00ffff" distance={60} />
             
-            {/* Sonic Pulse Rings Effect */}
-            <PulseRings position={node1Pos} color={themeColors[1]} active={nodeStates[0]} />
-            <PulseRings position={node2Pos} color={themeColors[2]} active={nodeStates[1]} />
-            <PulseRings position={node3Pos} color={themeColors[3]} active={nodeStates[2]} />
+            {/* Sonic Pulse Rings Effect - matching distinct colors */}
+            <PulseRings position={node1Pos} color="#00ffff" active={nodeStates[0]} />
+            <PulseRings position={node2Pos} color="#ff9900" active={nodeStates[1]} />
+            <PulseRings position={node3Pos} color="#00ff00" active={nodeStates[2]} />
 
             {/* Start Platform */}
             <SimplePlatform position={[0, -2, 5]} size={[8, 1, 8]} safe interactive />
