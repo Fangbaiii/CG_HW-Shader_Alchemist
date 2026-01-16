@@ -21,6 +21,71 @@ type LabDefinition = {
     isSafeSurface?: boolean;
 };
 
+// --- Small helpers for procedural planet coloring ---
+const fract = (v: number) => v - Math.floor(v);
+const pseudoNoise3 = (x: number, y: number, z: number) => {
+    return fract(Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453123);
+};
+const fbm3 = (x: number, y: number, z: number) => {
+    let value = 0;
+    let amplitude = 0.5;
+    let frequency = 1;
+    for (let i = 0; i < 5; i += 1) {
+        value += amplitude * pseudoNoise3(x * frequency, y * frequency, z * frequency);
+        frequency *= 2;
+        amplitude *= 0.5;
+    }
+    return value;
+};
+const smoothstep = (edge0: number, edge1: number, x: number) => {
+    const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
+    return t * t * (3 - 2 * t);
+};
+
+const buildSaturnGeometry = (radius: number) => {
+    const geometry = new THREE.SphereGeometry(radius, 96, 96);
+    const positions = geometry.attributes.position as THREE.BufferAttribute;
+    const colors = new Float32Array(positions.count * 3);
+
+    const bandA = new THREE.Color('#c2b08a'); // warm beige
+    const bandB = new THREE.Color('#b59a73'); // tan
+    const bandC = new THREE.Color('#8d785b'); // muted brown
+    const bandD = new THREE.Color('#d8c7a3'); // light cream
+    const haze = new THREE.Color('#e9e2cf'); // high-atmosphere veil
+
+    const working = new THREE.Color();
+    const invRadius = 1 / radius;
+
+    for (let i = 0; i < positions.count; i += 1) {
+        const x = positions.getX(i);
+        const y = positions.getY(i);
+        const z = positions.getZ(i);
+
+        const lat = y * invRadius; // -1 to 1
+        const stripe = Math.abs(lat);
+        const bandMix = smoothstep(0.0, 0.35, stripe) * 0.9 + pseudoNoise3(x * 0.02, y * 0.02, z * 0.02) * 0.1;
+        const grain = fbm3(x * 0.08, y * 0.04, z * 0.08) * 0.2;
+
+        // Blend alternating bands
+        if (stripe < 0.2) {
+            working.copy(bandD).lerp(bandA, bandMix).lerp(haze, 0.1 + grain);
+        } else if (stripe < 0.45) {
+            working.copy(bandA).lerp(bandB, bandMix).lerp(haze, 0.08 + grain);
+        } else if (stripe < 0.7) {
+            working.copy(bandB).lerp(bandC, bandMix).lerp(haze, 0.05 + grain);
+        } else {
+            working.copy(bandC).lerp(bandB, bandMix * 0.6).lerp(haze, 0.12 + grain);
+        }
+
+        colors[i * 3] = working.r;
+        colors[i * 3 + 1] = working.g;
+        colors[i * 3 + 2] = working.b;
+    }
+
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    return geometry;
+};
+
 // --- 第三关的平台组件 - 简单立方体 ---
 const SimplePlatform = ({
     position,
@@ -133,6 +198,11 @@ const OpticalMatrixBackground = React.memo(({ intensity, activeColor }: { intens
         groupRef.current.rotation.y = state.clock.elapsedTime * 0.02 * (1 + intensity);
     });
 
+    const planetGeometry = useMemo(() => buildSaturnGeometry(200), []);
+    const cloudGeometry = useMemo(() => new THREE.SphereGeometry(204, 64, 64), []);
+    const atmosphereGeometry = useMemo(() => new THREE.SphereGeometry(208, 48, 48), []);
+    const ringGeometry = useMemo(() => new THREE.RingGeometry(230, 320, 128, 8), []);
+
     return (
         <group ref={groupRef}>
             <Stars radius={150} depth={50} count={3000} factor={4} saturation={0} fade speed={0.5} />
@@ -148,7 +218,7 @@ const OpticalMatrixBackground = React.memo(({ intensity, activeColor }: { intens
             />
 
             {/* Vertical Energy Pillars */}
-            {pillars.map((p, i) => (
+            {pillars?.map((p, i) => (
                 <mesh key={i} position={[p.x, 0, p.z]}>
                     <cylinderGeometry args={[0.2, 0.2, p.h, 8]} />
                     <meshBasicMaterial 
@@ -179,6 +249,53 @@ const OpticalMatrixBackground = React.memo(({ intensity, activeColor }: { intens
             {/* Matrix Grid Floor (Ceiling/Floor Illusion) */}
             <gridHelper args={[300, 60, "#333", "#111"]} position={[0, -50, 0]} />
             <gridHelper args={[300, 60, "#333", "#111"]} position={[0, 80, 0]} />
+
+            {/* Far planet for scale: Saturn-like bands with thin haze */}
+            <mesh position={[0, 40, -1100]} geometry={planetGeometry}>
+                <meshStandardMaterial
+                    vertexColors
+                    emissive="#0b0a08"
+                    emissiveIntensity={0.05}
+                    metalness={0.04}
+                    roughness={0.85}
+                    fog={false}
+                />
+            </mesh>
+            {/* Subtle haze */}
+            <mesh position={[0, 40, -1100]} geometry={cloudGeometry}>
+                <meshStandardMaterial
+                    color="#f3efe4"
+                    transparent
+                    opacity={0.06}
+                    depthWrite={false}
+                    metalness={0}
+                    roughness={1}
+                    fog={false}
+                />
+            </mesh>
+            {/* Thin atmosphere glow */}
+            <mesh position={[0, 40, -1100]} geometry={atmosphereGeometry}>
+                <meshBasicMaterial
+                    color="#e6d9b8"
+                    transparent
+                    opacity={0.05}
+                    depthWrite={false}
+                    fog={false}
+                />
+            </mesh>
+            {/* Planetary rings */}
+            <mesh position={[0, 40, -1100]} rotation={[Math.PI / 2.2, 0.3, 0]} geometry={ringGeometry}>
+                <meshStandardMaterial
+                    color="#d2c6ad"
+                    emissive="#a8997a"
+                    emissiveIntensity={0.15}
+                    metalness={0.15}
+                    roughness={0.6}
+                    transparent={false}
+                    side={THREE.DoubleSide}
+                    fog={false}
+                />
+            </mesh>
         </group>
     );
 });
@@ -289,7 +406,7 @@ export const MirrorWorld: React.FC<MirrorWorldProps> = ({ resetToken }) => {
             <fog attach="fog" args={['#050005', 40, 120]} />
 
             {/* Rich Cyber Atmosphere */}
-            <OpticalMatrixBackground item={undefined} intensity={intensity} activeColor={activeColor} />
+            <OpticalMatrixBackground intensity={intensity} activeColor={activeColor} />
 
             <ambientLight intensity={0.4} color="#8800ff" /> {/* Purple Base Ambient */}
             <directionalLight 

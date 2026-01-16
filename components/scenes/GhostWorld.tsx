@@ -94,7 +94,7 @@ const PlanetSurface: React.FC = () => {
         uTime: { value: 0 },
         uPlayerPos: { value: new THREE.Vector3(0, 0, 0) },
         // 地表颜色 - 提亮以显示地形细节
-        uBaseColor: { value: new THREE.Color('#746e68ff') },      // 中灰褐色
+        uBaseColor: { value: new THREE.Color('#746e68') },      // 中灰褐色
         uDarkColor: { value: new THREE.Color('#3a3835') },      // 深灰色但可见
         // 裂缝能量色
         uCrackColor: { value: new THREE.Color('#00ffff') },     // 青色能量
@@ -589,7 +589,7 @@ const MountainRange: React.FC = () => {
 
   return (
     <group>
-      {mountains.map((mt, i) => (
+      {mountains?.map((mt, i) => (
         <RuinedMountain
           key={i}
           position={mt.position}
@@ -729,14 +729,14 @@ const NebulaField: React.FC = () => {
     // ===== 前方星云 (正前方远景) =====
     { position: [0, 160, -200] as [number, number, number], scale: 200, color1: '#ff3388', color2: '#8833ff', opacity: 0.23 },
     { position: [-50, 140, -200] as [number, number, number], scale: 120, color1: '#ffaa00', color2: '#ff6600', opacity: 0.18 },
-    { position: [50, 140, -200] as [number, number, number], scale: 300, color1: '#00ff48ff', color2: '#ff00aa', opacity: 0.18 },
-    { position: [50, 160, 200] as [number, number, number], scale: 300, color1: '#0008ffff', color2: '#ff00aa', opacity: 0.18 },
-    { position: [50, 140, 200] as [number, number, number], scale: 300, color1: '#ffb700ff', color2: '#ff00aa', opacity: 0.18 },
+    { position: [50, 140, -200] as [number, number, number], scale: 300, color1: '#00ff48', color2: '#ff00aa', opacity: 0.18 },
+    { position: [50, 160, 200] as [number, number, number], scale: 300, color1: '#0008ff', color2: '#ff00aa', opacity: 0.18 },
+    { position: [50, 140, 200] as [number, number, number], scale: 300, color1: '#ffb700', color2: '#ff00aa', opacity: 0.18 },
 
   ], []);
   return (
     <group>
-      {nebulae.map((nebula, index) => (
+      {nebulae?.map((nebula, index) => (
         <NebulaCloud
           key={index}
           position={nebula.position}
@@ -1035,7 +1035,7 @@ const CrackEnergyStreams: React.FC = () => {
   return (
     <>
       {/* 裂缝能量流 - 从裂缝中喷射向太空 */}
-      {streams.map((stream, index) => (
+      {streams?.map((stream, index) => (
         <AbyssParticleStream
           key={`crack-stream-${index}`}
           position={stream.position}
@@ -1108,7 +1108,7 @@ export const GhostWorld: React.FC<GhostWorldProps> = ({ resetToken }) => (
     <StartingPlatform />
 
     {/* 关卡物体 - 幽灵墙和平台 */}
-    {GHOST_LEVEL_OBJECTS.map((data, index) => (
+    {GHOST_LEVEL_OBJECTS?.map((data, index) => (
       <LabObject
         key={`ghost-obj-${index}`}
         position={data.position}

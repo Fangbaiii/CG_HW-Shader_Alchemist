@@ -56,7 +56,8 @@ export function withUtilities(
     mainShader: string,
     utilities: Array<keyof typeof ShaderChunks> = ['common']
 ): string {
-    const utilityChunks = utilities.map(key => ShaderChunks[key]);
+    if (!utilities) return mainShader;
+    const utilityChunks = utilities?.map(key => ShaderChunks[key]) ?? [];
     return composeShader([...utilityChunks, mainShader]);
 }
 

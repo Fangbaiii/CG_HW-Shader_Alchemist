@@ -65,7 +65,8 @@ const LabObjectMesh = ({
     return (
       <group>
         <RoundedBox args={size} radius={0.2} smoothness={8} renderOrder={1}>
-          <JellyMaterial color="#24b60aff" side={THREE.BackSide} />
+          {/* Back face jelly tint (opaque hex) */}
+          <JellyMaterial color="#24b60a" side={THREE.BackSide} />
         </RoundedBox>
         <RoundedBox args={size} radius={0.2} smoothness={8} {...meshProps} renderOrder={2}>
           <JellyMaterial color="#39FF14" side={THREE.FrontSide} />

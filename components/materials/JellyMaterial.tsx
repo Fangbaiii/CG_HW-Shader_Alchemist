@@ -10,7 +10,7 @@ import jellyFrag from '../../shaders/materials/jelly.frag.glsl?raw';
 const JellyShaderMaterialImpl = shaderMaterial(
     {
         uTime: 0,
-        uColor: new THREE.Color('#26b809ff')
+        uColor: new THREE.Color('#26b809')
     },
     jellyVert,
     jellyFrag
@@ -20,7 +20,7 @@ extend({ JellyShaderMaterialImpl });
 
 // --- 1. JELLY MATERIAL ---
 // Uses custom shader to simulate wobbling fluid
-export const JellyMaterial = ({ color = "#33d017ff", side = THREE.FrontSide }: { color?: string, side?: THREE.Side }) => {
+export const JellyMaterial = ({ color = "#33d017", side = THREE.FrontSide }: { color?: string, side?: THREE.Side }) => {
     const materialRef = useAnimatedMaterial();
 
     return (
