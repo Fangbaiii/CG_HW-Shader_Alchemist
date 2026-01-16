@@ -68,7 +68,52 @@ const GoalBeacon = ({ position }: { position: [number, number, number] }) => (
     </group>
 );
 
-const CyberBackground = React.memo(() => {
+// --- Pulse Wave Effect ---
+const PulseRings = ({ position, color, active }: { position: THREE.Vector3 | [number, number, number], color: string, active: boolean }) => {
+    const groupRef = React.useRef<THREE.Group>(null);
+    
+    useFrame((state) => {
+        if (!groupRef.current || !active) return;
+        
+        groupRef.current.children.forEach((mesh, i) => {
+            const time = state.clock.elapsedTime;
+            // Staggered rings
+            const offset = i * 0.5;
+            const t = (time + offset) % 2; // 2 seconds cycle
+            
+            // Expand
+            const scale = 1 + t * 8; 
+            mesh.scale.set(scale, scale, scale);
+            
+            // Fade
+            const material = (mesh as THREE.Mesh).material as THREE.MeshBasicMaterial;
+            if (material) {
+                material.opacity = Math.max(0, 1 - t / 1.8);
+                // @ts-ignore
+                if(material.color) material.color.set(color);
+            }
+        });
+        
+        // Rotate the whole group slowly
+        groupRef.current.rotation.y += 0.01;
+    });
+
+    if (!active) return null;
+
+    return (
+        <group ref={groupRef} position={position}>
+            {[0, 1, 2].map(i => (
+                <mesh key={i} rotation={[Math.PI/2, 0, 0]}>
+                    <ringGeometry args={[0.8, 1, 32]} />
+                    <meshBasicMaterial color={color} transparent opacity={0.5} side={THREE.DoubleSide} />
+                </mesh>
+            ))}
+        </group>
+    );
+};
+
+// --- Dynamic Background ---
+const CyberBackground = React.memo(({ themeColor }: { themeColor: string }) => {
     const buildings = useMemo(() => {
         return Array.from({ length: 40 }).map((_, i) => {
             const angle = (i / 40) * Math.PI * 2;
@@ -76,15 +121,16 @@ const CyberBackground = React.memo(() => {
             const x = Math.cos(angle) * radius;
             const z = Math.sin(angle) * radius;
             const h = 10 + Math.random() * 40;
-            const emissiveColor = Math.random() > 0.5 ? "#ff00ff" : "#00ffff";
+            const emissiveColor = Math.random() > 0.5 ? "#ff00ff" : themeColor;
             return { x, z, h, emissiveColor };
         });
-    }, []);
+    }, [themeColor]); // Re-generate if theme changes drastically or just use prop for rendering? 
+    // Re-generating 40 meshes is cheap.
 
     return (
         <group>
             <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-            <Sparkles count={300} scale={[100, 50, 100]} size={6} speed={0.4} opacity={0.5} color="#00ffff" />
+            <Sparkles count={300} scale={[100, 50, 100]} size={6} speed={0.4} opacity={0.5} color={themeColor} />
 
             {/* Distant Cityscape - Procedural Buildings */}
             {buildings.map((b, i) => (
@@ -102,7 +148,7 @@ const CyberBackground = React.memo(() => {
             <Float speed={2} rotationIntensity={0.5} floatIntensity={1}>
                 <mesh position={[0, 30, -50]} rotation={[Math.PI / 4, 0, 0]}>
                     <torusGeometry args={[20, 0.5, 16, 100]} />
-                    <meshStandardMaterial color="#00ffff" emissive="#00ffff" emissiveIntensity={2} />
+                    <meshStandardMaterial color={themeColor} emissive={themeColor} emissiveIntensity={2} />
                 </mesh>
             </Float>
         </group>
@@ -194,17 +240,35 @@ export const MirrorWorld: React.FC<MirrorWorldProps> = ({ resetToken }) => {
     const onNode2Hit = React.useCallback((t: GunType) => handleNodeHit(1, t), [handleNodeHit]);
     const onNode3Hit = React.useCallback((t: GunType) => handleNodeHit(2, t), [handleNodeHit]);
 
+    // --- Active Theme Logic ---
+    const activeCount = nodeStates.filter(Boolean).length;
+    // 0: Cyan (Chill), 1: Magenta (Neon), 2: Orange (Danger), 3: Green (Success)
+    const themeColors = ["#00ffff", "#ff00ff", "#ff5500", "#00ff88"];
+    const currentTheme = themeColors[activeCount];
+
     return (
         <>
             <color attach="background" args={['#000205']} />
             <fog attach="fog" args={['#000205', 30, 90]} />
 
             {/* Rich Cyber Atmosphere */}
-            <CyberBackground />
+            <CyberBackground themeColor={currentTheme} />
 
-            <ambientLight intensity={0.5} color="#00ffff" />
-            <directionalLight position={[6, 14, 2]} intensity={1.5} color="#ff00ff" castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
-            <pointLight position={[0, 8, -25]} intensity={2} color="#00ffff" distance={50} />
+            <ambientLight intensity={0.5} color={currentTheme} />
+            <directionalLight 
+                position={[6, 14, 2]} 
+                intensity={1.5} 
+                color={activeCount % 2 === 0 ? "#ff00ff" : "#00ffff"} 
+                castShadow 
+                shadow-mapSize-width={1024} 
+                shadow-mapSize-height={1024} 
+            />
+            <pointLight position={[0, 8, -25]} intensity={2} color={currentTheme} distance={50} />
+            
+            {/* Sonic Pulse Rings Effect */}
+            <PulseRings position={node1Pos} color={themeColors[1]} active={nodeStates[0]} />
+            <PulseRings position={node2Pos} color={themeColors[2]} active={nodeStates[1]} />
+            <PulseRings position={node3Pos} color={themeColors[3]} active={nodeStates[2]} />
 
             {/* Start Platform */}
             <SimplePlatform position={[0, -2, 5]} size={[8, 1, 8]} safe interactive />
@@ -225,6 +289,7 @@ export const MirrorWorld: React.FC<MirrorWorldProps> = ({ resetToken }) => {
             {/* Node 1 */}
             <LabObject
                 position={[10, 2, 0]}
+                rotation={[0, Math.PI / 4, 0]}
                 size={[2, 2, 2]}
                 resetToken={resetToken}
                 stageId={2}
@@ -233,6 +298,7 @@ export const MirrorWorld: React.FC<MirrorWorldProps> = ({ resetToken }) => {
             {/* Node 2 */}
             <LabObject
                 position={[10, 2, -20]}
+                rotation={[0, Math.PI / 4, 0]}
                 size={[2, 2, 2]}
                 resetToken={resetToken}
                 stageId={2}
@@ -241,6 +307,7 @@ export const MirrorWorld: React.FC<MirrorWorldProps> = ({ resetToken }) => {
             {/* Node 3 */}
             <LabObject
                 position={[-10, 2, -20]}
+                rotation={[0, Math.PI / 4, 0]}
                 size={[2, 2, 2]}
                 resetToken={resetToken}
                 stageId={2}

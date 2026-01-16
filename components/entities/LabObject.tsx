@@ -165,7 +165,7 @@ export const LabObject: React.FC<LabObjectProps> = ({
   };
 
   return (
-    <group position={position} rotation={rotation} userData={{
+    <group position={position} rotation={rotation ? new THREE.Euler(...rotation) : undefined} userData={{
       isInteractive: true,
       hitHandler: hit,
       type: type,
