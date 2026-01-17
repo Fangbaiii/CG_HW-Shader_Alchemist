@@ -28,10 +28,10 @@ const STAGES = [
   },
   {
     code: '03',
-    title: 'Mirror Spire',
-    detail: 'Chrome the launch pads to harvest forward boosts and climb the prism tower.',
-    spawn: new THREE.Vector3(0, 1.9, 4),
-    goalZ: -35, // Match Mirror goal beacon depth so completion triggers
+    title: 'Rolling Mirror',
+    detail: 'Auto-runner strip. Keep the energy core centered, shoot nodes to manifest the next platforms, and read the rhythm of moving blocks.',
+    spawn: new THREE.Vector3(0, 2.2, 6),
+    goalZ: -240,
   },
 ] as const;
 

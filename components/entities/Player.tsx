@@ -13,6 +13,7 @@ const GRAVITY = 18.0;
 const PLAYER_RADIUS = 0.3;
 const PLAYER_EYE_HEIGHT = 1.7;
 const DEATH_HEIGHT = -2.5;
+const AUTO_RUN_SPEED = 6.5;
 
 interface PlayerProps {
   currentGun: GunType;
@@ -100,11 +101,13 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
   const frameCounter = useRef(0);
 
   useEffect(() => {
+    const isAutoRunner = stageId === 2;
+
     const onKeyDown = (event: any) => {
       switch (event.code) {
         case 'ArrowUp':
         case 'KeyW':
-          moveForward.current = true;
+          if (!isAutoRunner) moveForward.current = true;
           break;
         case 'ArrowLeft':
         case 'KeyA':
@@ -112,7 +115,7 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
           break;
         case 'ArrowDown':
         case 'KeyS':
-          moveBackward.current = true;
+          if (!isAutoRunner) moveBackward.current = true;
           break;
         case 'ArrowRight':
         case 'KeyD':
@@ -174,10 +177,13 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
         doc.removeEventListener('mousedown', onMouseDown);
       }
     };
-  }, [isLocked, currentGun]);
+  }, [isLocked, currentGun, stageId]);
 
   useEffect(() => {
     camera.position.copy(spawnPoint);
+    if (stageId === 2) {
+      camera.rotation.set(-0.3, 0, 0);
+    }
     velocity.current.set(0, 0, 0);
     canJump.current = true;
     stageCompleteRef.current = false;
@@ -246,13 +252,17 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
 
   const respawn = useCallback(() => {
     camera.position.copy(spawnPoint);
-    // Reset rotation completely to look forward (negative Z) and level horizon
-    camera.rotation.set(0, 0, 0);
+    // Reset rotation; stage 3 keeps a fixed slight top-down pitch
+    if (stageId === 2) {
+      camera.rotation.set(-0.3, 0, 0);
+    } else {
+      camera.rotation.set(0, 0, 0);
+    }
     velocity.current.set(0, 0, 0);
     canJump.current = true;
     isDying.current = false;
     deathCooldown.current = 1.0;
-  }, [camera, spawnPoint]);
+  }, [camera, spawnPoint, stageId]);
 
   const triggerDeath = useCallback((reason: 'lava' | 'void') => {
     if (isDying.current || deathCooldown.current > 0) return;
@@ -286,6 +296,7 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
 
     // Clamp delta to prevent tunneling during lag spikes
     const dt = Math.min(delta, 0.1);
+    const isAutoRunner = stageId === 2;
 
     // --- PHYSICS / MOVEMENT ---
 
@@ -422,12 +433,20 @@ export const Player: React.FC<PlayerProps> = ({ currentGun, onShoot, onDeath, on
     velocity.current.x -= velocity.current.x * 10.0 * dt;
     velocity.current.z -= velocity.current.z * 10.0 * dt;
 
-    direction.current.z = Number(moveForward.current) - Number(moveBackward.current);
+    direction.current.z = isAutoRunner ? 1 : (Number(moveForward.current) - Number(moveBackward.current));
     direction.current.x = Number(moveRight.current) - Number(moveLeft.current);
     direction.current.normalize();
 
-    if (moveForward.current || moveBackward.current) velocity.current.z += direction.current.z * 40.0 * dt * SPEED;
-    if (moveLeft.current || moveRight.current) velocity.current.x -= direction.current.x * 40.0 * dt * SPEED;
+    if (isAutoRunner) {
+      // Constant forward drive, lateral only for dodging
+      velocity.current.z = Math.max(velocity.current.z, AUTO_RUN_SPEED);
+      if (direction.current.x !== 0) {
+        velocity.current.x -= direction.current.x * 40.0 * dt * (SPEED * 0.7);
+      }
+    } else {
+      if (moveForward.current || moveBackward.current) velocity.current.z += direction.current.z * 40.0 * dt * SPEED;
+      if (moveLeft.current || moveRight.current) velocity.current.x -= direction.current.x * 40.0 * dt * SPEED;
+    }
 
     // Use cached forwardVec and rightVec instead of creating new vectors
     forwardVec.set(0, 0, -1).applyQuaternion(camera.quaternion);

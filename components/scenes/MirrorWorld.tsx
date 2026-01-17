@@ -1,511 +1,556 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Stars, Sparkles, Float } from '@react-three/drei';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { Stars, Sparkles } from '@react-three/drei';
 import * as THREE from 'three';
 import { LabObject } from '@/components/entities/LabObject';
-import { LaserPuzzle } from '@/components/core/LaserPuzzle';
 import { GunType } from '@/types';
-import { CyberGridMaterial } from '@/components/materials'; // Assuming index export
 
 // ==========================================
-// MIRROR WORLD (Stage 3)
+// MIRROR WORLD (Stage 3) - Linear "rolling sky" runner
 // ==========================================
 
-type LabDefinition = {
+const PALETTES = [
+    {
+        name: 'cyan-core',
+        track: '#6de8ff',
+        dim: '#1c2c3a',
+        highlight: '#bff6ff',
+        edge: '#0ff7ff',
+        gate: '#ff3b6a',
+        ambient: '#6de8ff',
+    },
+    {
+        name: 'magenta-push',
+        track: '#ff7ce5',
+        dim: '#2a1730',
+        highlight: '#ffc6f7',
+        edge: '#ff42c9',
+        gate: '#7cf4ff',
+        ambient: '#ff7ce5',
+    },
+    {
+        name: 'amber-burst',
+        track: '#ffc857',
+        dim: '#2a1c0f',
+        highlight: '#ffe2a4',
+        edge: '#ff9f1c',
+        gate: '#5ad1ff',
+        ambient: '#ffc857',
+    },
+    {
+        name: 'emerald-drive',
+        track: '#7af0c4',
+        dim: '#0f2a21',
+        highlight: '#c7ffe6',
+        edge: '#00ffa5',
+        gate: '#ff5f87',
+        ambient: '#7af0c4',
+    },
+];
+const SKY_COLOR = '#03060b';
+
+type Segment = {
+    id: number;
+    z: number;
+    width: number;
+    length: number;
+};
+
+type ControlNode = {
+    id: number;
     position: [number, number, number];
-    size?: [number, number, number];
-    rotation?: [number, number, number];
-    contactBoost?: [number, number, number];
-    initialType?: GunType | null;
-    isTargetSurface?: boolean;
-    isSafeSurface?: boolean;
+    activatesBand: number;
 };
 
-// --- Small helpers for procedural planet coloring ---
-const fract = (v: number) => v - Math.floor(v);
-const pseudoNoise3 = (x: number, y: number, z: number) => {
-    return fract(Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453123);
-};
-const fbm3 = (x: number, y: number, z: number) => {
-    let value = 0;
-    let amplitude = 0.5;
-    let frequency = 1;
-    for (let i = 0; i < 5; i += 1) {
-        value += amplitude * pseudoNoise3(x * frequency, y * frequency, z * frequency);
-        frequency *= 2;
-        amplitude *= 0.5;
-    }
-    return value;
-};
-const smoothstep = (edge0: number, edge1: number, x: number) => {
-    const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
-    return t * t * (3 - 2 * t);
+type Gate = {
+    band: number;
+    z: number;
 };
 
-const buildSaturnGeometry = (radius: number) => {
-    const geometry = new THREE.SphereGeometry(radius, 96, 96);
-    const positions = geometry.attributes.position as THREE.BufferAttribute;
-    const colors = new Float32Array(positions.count * 3);
+const SEGMENT_LENGTH = 16;
+const SEGMENT_COUNT = 16;
+const BAND_SIZE = 4; // how many segments per activation band
 
-    const bandA = new THREE.Color('#c2b08a'); // warm beige
-    const bandB = new THREE.Color('#b59a73'); // tan
-    const bandC = new THREE.Color('#8d785b'); // muted brown
-    const bandD = new THREE.Color('#d8c7a3'); // light cream
-    const haze = new THREE.Color('#e9e2cf'); // high-atmosphere veil
+const clampPaletteIndex = (i: number) => Math.max(0, Math.min(PALETTES.length - 1, i));
 
-    const working = new THREE.Color();
-    const invRadius = 1 / radius;
-
-    for (let i = 0; i < positions.count; i += 1) {
-        const x = positions.getX(i);
-        const y = positions.getY(i);
-        const z = positions.getZ(i);
-
-        const lat = y * invRadius; // -1 to 1
-        const stripe = Math.abs(lat);
-        const bandMix = smoothstep(0.0, 0.35, stripe) * 0.9 + pseudoNoise3(x * 0.02, y * 0.02, z * 0.02) * 0.1;
-        const grain = fbm3(x * 0.08, y * 0.04, z * 0.08) * 0.2;
-
-        // Blend alternating bands
-        if (stripe < 0.2) {
-            working.copy(bandD).lerp(bandA, bandMix).lerp(haze, 0.1 + grain);
-        } else if (stripe < 0.45) {
-            working.copy(bandA).lerp(bandB, bandMix).lerp(haze, 0.08 + grain);
-        } else if (stripe < 0.7) {
-            working.copy(bandB).lerp(bandC, bandMix).lerp(haze, 0.05 + grain);
-        } else {
-            working.copy(bandC).lerp(bandB, bandMix * 0.6).lerp(haze, 0.12 + grain);
-        }
-
-        colors[i * 3] = working.r;
-        colors[i * 3 + 1] = working.g;
-        colors[i * 3 + 2] = working.b;
-    }
-
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    return geometry;
+const buildSegments = (): Segment[] => {
+    return Array.from({ length: SEGMENT_COUNT }).map((_, i) => ({
+        id: i,
+        z: -i * SEGMENT_LENGTH,
+        width: i % 3 === 0 ? 9 : 8,
+        length: SEGMENT_LENGTH,
+    }));
 };
 
-// --- 第三关的平台组件 - 简单立方体 ---
-const SimplePlatform = ({
-    position,
-    size,
-    safe = false,
-    interactive = false,
-}: {
-    position: [number, number, number];
-    size: [number, number, number];
-    safe?: boolean;
-    interactive?: boolean;
-}) => {
-    const userData: Record<string, any> = {};
-    if (safe) {
-        userData.isSafeSurface = true;
-    }
-    if (interactive) {
-        userData.isInteractive = true;
-        userData.size = size;
-        userData.type = null;
-    }
+const bandIndexFor = (segmentId: number) => Math.floor(segmentId / BAND_SIZE);
 
-    // 第三关：赛博网格风格
+const RunwaySegment: React.FC<{ segment: Segment; active: boolean; palette: typeof PALETTES[number] }>
+    = ({ segment, active, palette }) => {
+        const { z, width, length } = segment;
+        const dim = 0.6;
+        return (
+            <group position={[0, 0, z]}>
+                {active ? (
+                    <>
+                        <mesh
+                            position={[0, -0.2, 0]}
+                            castShadow
+                            receiveShadow
+                            userData={{ isSafeSurface: true, size: [width, dim, length] }}
+                        >
+                            <boxGeometry args={[width, dim, length]} />
+                            <meshStandardMaterial color={palette.dim} roughness={0.9} metalness={0.05} />
+                        </mesh>
+                        <mesh
+                            position={[0, 0, 0]}
+                            castShadow
+                            receiveShadow
+                            userData={{ isSafeSurface: true, size: [width - 0.4, 0.25, length - 0.4] }}
+                        >
+                            <boxGeometry args={[width - 0.4, 0.25, length - 0.4]} />
+                            <meshStandardMaterial color={palette.track} emissive={palette.edge} emissiveIntensity={0.08} roughness={0.6} metalness={0.08} />
+                        </mesh>
+                        <mesh position={[0, 0.14, 0]}>
+                            <boxGeometry args={[0.35, 0.1, length - 0.6]} />
+                            <meshStandardMaterial color={palette.highlight} emissive={palette.highlight} emissiveIntensity={0.3} roughness={0.4} metalness={0.1} />
+                        </mesh>
+                        {/* Side rails for direction cue */}
+                        <mesh position={[width / 2 - 0.35, 0.2, 0]}>
+                            <boxGeometry args={[0.3, 0.25, length - 0.4]} />
+                            <meshStandardMaterial color={palette.edge} emissive={palette.edge} emissiveIntensity={0.35} roughness={0.3} metalness={0.25} />
+                        </mesh>
+                        <mesh position={[-width / 2 + 0.35, 0.2, 0]}>
+                            <boxGeometry args={[0.3, 0.25, length - 0.4]} />
+                            <meshStandardMaterial color={palette.edge} emissive={palette.edge} emissiveIntensity={0.35} roughness={0.3} metalness={0.25} />
+                        </mesh>
+                    </>
+                ) : (
+                    <lineSegments position={[0, 0, 0]}>
+                        <edgesGeometry args={[new THREE.BoxGeometry(width, dim, length)]} />
+                        <lineBasicMaterial color={palette.edge} transparent opacity={0.12} />
+                    </lineSegments>
+                )}
+            </group>
+        );
+    };
+
+const BarrierGate: React.FC<{ gate: Gate; active: boolean; palette: typeof PALETTES[number] }> = ({ gate, active, palette }) => {
+    const ref = useRef<THREE.Mesh>(null);
+    useFrame((_, delta) => {
+        if (!ref.current) return;
+        const targetY = active ? -2.5 : 0.9;
+        ref.current.position.y = THREE.MathUtils.lerp(ref.current.position.y, targetY, delta * 3);
+    });
     return (
         <mesh
-            position={position}
+            ref={ref}
+            position={[0, 0.9, gate.z]}
             castShadow
             receiveShadow
-            userData={Object.keys(userData).length ? userData : undefined}
+            userData={{ isInteractive: true, size: [10, 2, 1.5] }}
         >
-            <boxGeometry args={size} />
-            <CyberGridMaterial />
+            <boxGeometry args={[10, 2, 1.5]} />
+            <meshStandardMaterial color={palette.gate} emissive={palette.gate} emissiveIntensity={0.8} roughness={0.35} metalness={0.4} />
         </mesh>
     );
 };
 
-// --- 终点信标 ---
-const GoalBeacon = ({ position }: { position: [number, number, number] }) => (
+const MovingObstacle: React.FC<{
+    type: 'lift' | 'spinner' | 'pusher';
+    position: [number, number, number];
+    size: [number, number, number];
+    speed: number;
+    range?: number;
+    palette: typeof PALETTES[number];
+}> = ({ type, position, size, speed, range = 2, palette }) => {
+    const ref = useRef<THREE.Mesh>(null);
+
+    useFrame((state) => {
+        if (!ref.current) return;
+        const t = state.clock.elapsedTime * speed;
+        if (type === 'lift') {
+            ref.current.position.y = position[1] + Math.sin(t) * range;
+        }
+        if (type === 'pusher') {
+            ref.current.position.x = position[0] + Math.sin(t) * range;
+        }
+        if (type === 'spinner') {
+            ref.current.rotation.y = t;
+        }
+    });
+
+    const userData = { isInteractive: true, size };
+    return (
+        <mesh ref={ref} position={position} userData={userData} castShadow receiveShadow>
+            <boxGeometry args={size} />
+            <meshStandardMaterial color={palette.dim} emissive={palette.edge} emissiveIntensity={0.18} roughness={0.4} metalness={0.2} />
+        </mesh>
+    );
+};
+
+const ActivatorNode: React.FC<{ node: ControlNode; onHit: (band: number) => void; resetToken: number; palette: typeof PALETTES[number] }>
+    = ({ node, onHit, resetToken, palette }) => {
+        const { position, activatesBand } = node;
+        const handleHit = (t: GunType) => {
+            if (t === GunType.MIRROR) onHit(activatesBand);
+        };
+        return (
+            <group position={position}>
+                <LabObject
+                    position={[0, 0, 0]}
+                    size={[1.6, 1.6, 1.6]}
+                    rotation={[0, Math.PI / 4, 0]}
+                    resetToken={resetToken}
+                    stageId={2}
+                    onTypeChange={handleHit}
+                />
+                <mesh position={[0, 1.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                    <ringGeometry args={[0.9, 1.4, 24]} />
+                    <meshBasicMaterial color={palette.edge} transparent opacity={0.7} />
+                </mesh>
+            </group>
+        );
+    };
+
+const GoalBeacon = ({ position, palette }: { position: [number, number, number]; palette: typeof PALETTES[number] }) => (
     <group position={position}>
         <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[1.2, 0.15, 16, 64]} />
-            <meshStandardMaterial color="#7cf4ff" emissive="#7cf4ff" emissiveIntensity={0.6} metalness={1} roughness={0.1} />
+            <torusGeometry args={[1.6, 0.2, 16, 64]} />
+            <meshStandardMaterial color={palette.edge} emissive={palette.edge} emissiveIntensity={1.4} metalness={0.35} roughness={0.25} />
         </mesh>
-        <pointLight color="#7cf4ff" intensity={2} distance={5} />
+        <pointLight color={palette.edge} intensity={3} distance={8} />
     </group>
 );
 
-// --- Pulse Wave Effect ---
-const PulseRings = ({ position, color, active }: { position: THREE.Vector3 | [number, number, number], color: string, active: boolean }) => {
-    const groupRef = React.useRef<THREE.Group>(null);
-    
+const PulseWaves: React.FC<{ palette: typeof PALETTES[number] }> = ({ palette }) => {
+    const rings = [useRef<THREE.Mesh>(null), useRef<THREE.Mesh>(null), useRef<THREE.Mesh>(null)];
     useFrame((state) => {
-        if (!groupRef.current || !active) return;
-        
-        groupRef.current.children.forEach((mesh, i) => {
-            const time = state.clock.elapsedTime;
-            // Staggered rings
-            const offset = i * 0.5;
-            const t = (time + offset) % 2; // 2 seconds cycle
-            
-            // Expand
-            const scale = 1 + t * 8; 
-            mesh.scale.set(scale, scale, scale);
-            
-            // Fade
-            const material = (mesh as THREE.Mesh).material as THREE.MeshBasicMaterial;
-            if (material) {
-                material.opacity = Math.max(0, 1 - t / 1.8);
-                // @ts-ignore
-                if(material.color) material.color.set(color);
-            }
+        const t = state.clock.elapsedTime;
+        rings.forEach((ref, idx) => {
+            if (!ref.current) return;
+            const phase = t + idx * 0.8;
+            const cyc = (phase % 2.4) / 2.4;
+            const scale = 1 + cyc * 24;
+            const opacity = 0.55 * (1 - cyc);
+            ref.current.scale.set(scale, scale, scale);
+            const mat = ref.current.material as THREE.MeshBasicMaterial;
+            if (mat) mat.opacity = opacity;
         });
-        
-        // Rotate the whole group slowly
-        groupRef.current.rotation.y += 0.01;
     });
-
-    if (!active) return null;
-
     return (
-        <group ref={groupRef} position={position}>
-            {[0, 1, 2].map(i => (
-                <mesh key={i} rotation={[Math.PI/2, 0, 0]}>
-                    <ringGeometry args={[0.8, 1, 32]} />
-                    <meshBasicMaterial color={color} transparent opacity={0.5} side={THREE.DoubleSide} />
+        <group position={[0, 0.02, -20]}>
+            {[0, 1, 2].map((i) => (
+                <mesh key={i} ref={rings[i]} rotation={[-Math.PI / 2, 0, 0]}>
+                    <ringGeometry args={[2.5, 2.8, 64]} />
+                    <meshBasicMaterial color={palette.edge} transparent opacity={0.5} />
                 </mesh>
             ))}
         </group>
     );
 };
 
-// --- Optical Matrix Background ---
-const OpticalMatrixBackground = React.memo(({ intensity, activeColor }: { intensity: number, activeColor: string }) => {
-    // 1. Vertical Energy Pillars (Data Streams)
-    const pillars = useMemo(() => {
-        return Array.from({ length: 30 }).map((_, i) => {
-            const angle = (i / 30) * Math.PI * 2;
-            const radius = 60 + Math.random() * 40; // Far background
-            const x = Math.cos(angle) * radius;
-            const z = Math.sin(angle) * radius;
-            const h = 50 + Math.random() * 100;
-            return { x, z, h, speed: 0.2 + Math.random() * 0.5 };
+const FlyingDrake: React.FC<{ offsetZ: number; palette: typeof PALETTES[number]; speed?: number; height?: number; sway?: number }>
+    = ({ offsetZ, palette, speed = 0.35, height = 8, sway = 3 }) => {
+        const ref = useRef<THREE.Group>(null);
+        useFrame((state) => {
+            if (!ref.current) return;
+            const t = state.clock.elapsedTime * speed;
+            ref.current.position.z = offsetZ + Math.sin(t) * 40;
+            ref.current.position.x = Math.sin(t * 1.6) * 6;
+            ref.current.position.y = height + Math.sin(t * 2.2) * sway;
+            ref.current.rotation.y = Math.sin(t * 1.2) * 0.4;
         });
-    }, []);
-
-    const groupRef = React.useRef<THREE.Group>(null);
-    useFrame((state) => {
-        if (!groupRef.current) return;
-        // Subtle rotation of the whole world matrix
-        groupRef.current.rotation.y = state.clock.elapsedTime * 0.02 * (1 + intensity);
-    });
-
-    const planetGeometry = useMemo(() => buildSaturnGeometry(200), []);
-    const cloudGeometry = useMemo(() => new THREE.SphereGeometry(204, 64, 64), []);
-    const atmosphereGeometry = useMemo(() => new THREE.SphereGeometry(208, 48, 48), []);
-    const ringGeometry = useMemo(() => new THREE.RingGeometry(230, 320, 128, 8), []);
-
-    return (
-        <group ref={groupRef}>
-            <Stars radius={150} depth={50} count={3000} factor={4} saturation={0} fade speed={0.5} />
-            
-            {/* Ambient Sparkles - reacting to intensity */}
-            <Sparkles 
-                count={500} 
-                scale={[120, 80, 120]} 
-                size={4 + intensity * 4} 
-                speed={0.2 + intensity} 
-                opacity={0.4} 
-                color={activeColor} 
-            />
-
-            {/* Vertical Energy Pillars */}
-            {pillars?.map((p, i) => (
-                <mesh key={i} position={[p.x, 0, p.z]}>
-                    <cylinderGeometry args={[0.2, 0.2, p.h, 8]} />
-                    <meshBasicMaterial 
-                        color={activeColor} 
-                        transparent 
-                        opacity={0.3} 
-                        blending={THREE.AdditiveBlending} 
-                    />
+        return (
+            <group ref={ref} position={[0, height, offsetZ]}>
+                <mesh rotation={[Math.PI / 2, 0, 0]}>
+                    <cylinderGeometry args={[0.35, 0.45, 3.8, 12, 1]} />
+                    <meshStandardMaterial color={palette.edge} emissive={palette.edge} emissiveIntensity={0.4} roughness={0.4} metalness={0.2} />
                 </mesh>
-            ))}
+                <mesh position={[0, 0.3, 2.3]}>
+                    <sphereGeometry args={[0.5, 16, 12]} />
+                    <meshStandardMaterial color={palette.gate} emissive={palette.gate} emissiveIntensity={0.3} roughness={0.4} metalness={0.25} />
+                </mesh>
+                <mesh position={[0, 0, -2.3]} rotation={[Math.PI / 2.2, 0, 0]}>
+                    <coneGeometry args={[0.5, 2.4, 14]} />
+                    <meshStandardMaterial color={palette.edge} emissive={palette.edge} emissiveIntensity={0.25} roughness={0.35} metalness={0.2} />
+                </mesh>
+                <mesh position={[0.2, 0.2, 0]} rotation={[0, 0, Math.PI / 9]}>
+                    <planeGeometry args={[4, 1.6, 1, 1]} />
+                    <meshStandardMaterial color={palette.highlight} transparent opacity={0.8} side={THREE.DoubleSide} />
+                </mesh>
+                <mesh position={[-0.2, 0.2, 0]} rotation={[0, 0, -Math.PI / 9]}>
+                    <planeGeometry args={[4, 1.6, 1, 1]} />
+                    <meshStandardMaterial color={palette.highlight} transparent opacity={0.8} side={THREE.DoubleSide} />
+                </mesh>
+            </group>
+        );
+    };
 
-            {/* Massive Optical Rings - The "Lens" of the world */}
-            <Float speed={1} rotationIntensity={0.2} floatIntensity={0.5}>
-                <group position={[0, 40, -80]} rotation={[Math.PI/3, 0, 0]}>
-                    {/* Ring 1 */}
-                    <mesh rotation={[0, 0, 0]}>
-                        <torusGeometry args={[40, 0.2, 16, 128]} />
-                        <meshStandardMaterial color="#ffffff" emissive={activeColor} emissiveIntensity={1 + intensity} />
+const SideParticleStream: React.FC<{ side: 'left' | 'right'; palette: typeof PALETTES[number]; count?: number; length?: number }>
+    = ({ side, palette, count = 70, length = 320 }) => {
+        const startZ = -8;
+        const endZ = -length;
+        const positions = useMemo(() => {
+            const arr = new Float32Array(count * 3);
+            for (let i = 0; i < count; i++) {
+                const xBase = side === 'left' ? -16 : 16;
+                const x = xBase + (Math.random() * 4 - 2);
+                const y = 1 + Math.random() * 7;
+                const z = -Math.random() * length;
+                arr[i * 3] = x;
+                arr[i * 3 + 1] = y;
+                arr[i * 3 + 2] = z;
+            }
+            return arr;
+        }, [count, length, side]);
+
+        const velocities = useMemo(() => {
+            const v = new Float32Array(count);
+            for (let i = 0; i < count; i++) {
+                const dir = Math.random() > 0.5 ? 1 : -1;
+                v[i] = dir * (0.8 + Math.random() * 1.1);
+            }
+            return v;
+        }, [count]);
+
+        const ref = useRef<THREE.Points>(null);
+        useFrame((_, delta) => {
+            if (!ref.current) return;
+            const attr = ref.current.geometry.getAttribute('position') as THREE.BufferAttribute;
+            for (let i = 0; i < count; i++) {
+                let z = attr.getZ(i) + velocities[i] * delta * 10;
+                if (z > startZ) z = endZ;
+                if (z < endZ) z = startZ;
+                attr.setZ(i, z);
+            }
+            attr.needsUpdate = true;
+        });
+
+        return (
+            <points ref={ref}>
+                <bufferGeometry>
+                    <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+                </bufferGeometry>
+                <pointsMaterial color={palette.edge} size={0.35} sizeAttenuation transparent opacity={0.78} depthWrite={false} />
+            </points>
+        );
+    };
+
+const LightColumns: React.FC<{ palette: typeof PALETTES[number]; length?: number; spacing?: number }>
+    = ({ palette, length = 340, spacing = 8 }) => {
+        const columns = useMemo(() => {
+            const items: { x: number; z: number; h: number }[] = [];
+            const count = Math.floor(length / spacing);
+            for (let i = 0; i <= count; i++) {
+                const z = -i * spacing - 6;
+                const side = i % 2 === 0 ? 1 : -1;
+                const baseX = side * 14;
+                const jitter = (i % 3) * 0.6;
+                const h = 5.5 + (i % 4) * 0.7;
+                items.push({ x: baseX + side * jitter, z, h });
+            }
+            return items;
+        }, [length, spacing]);
+
+        const columnColor = useMemo(() => {
+            const c = new THREE.Color(palette.edge);
+            const d = new THREE.Color(palette.dim);
+            return c.lerp(d, 0.55).getStyle();
+        }, [palette]);
+
+        return (
+            <group>
+                {columns.map((col, idx) => (
+                    <mesh key={idx} position={[col.x, col.h / 2, col.z]}>
+                        <cylinderGeometry args={[0.25, 0.22, col.h, 8, 1]} />
+                        <meshStandardMaterial
+                            color={columnColor}
+                            emissive={palette.edge}
+                            emissiveIntensity={0.35}
+                            roughness={0.65}
+                            metalness={0.28}
+                        />
                     </mesh>
-                    {/* Ring 2 - Counter Rotating */}
-                    <mesh rotation={[Math.PI/2, 0, 0]} scale={[0.9, 0.9, 0.9]}>
-                        <torusGeometry args={[40, 0.5, 16, 128]} />
-                        <meshStandardMaterial color="#222" emissive={activeColor} emissiveIntensity={0.5} wireframe />
-                    </mesh>
-                </group>
-            </Float>
+                ))}
+            </group>
+        );
+    };
 
-            {/* Matrix Grid Floor (Ceiling/Floor Illusion) */}
-            <gridHelper args={[300, 60, "#333", "#111"]} position={[0, -50, 0]} />
-            <gridHelper args={[300, 60, "#333", "#111"]} position={[0, 80, 0]} />
-
-            {/* Far planet for scale: Saturn-like bands with thin haze */}
-            <mesh position={[0, 40, -1100]} geometry={planetGeometry}>
+const SkyRing: React.FC<{ palette: typeof PALETTES[number]; position?: [number, number, number] }>
+    = ({ palette, position = [0, 30, -140] }) => {
+        const ref = useRef<THREE.Mesh>(null);
+        useFrame((state) => {
+            if (!ref.current) return;
+            const t = state.clock.elapsedTime;
+            ref.current.rotation.z = t * 0.08;
+            ref.current.rotation.x = Math.PI / 2 + Math.sin(t * 0.12) * 0.08;
+            ref.current.scale.setScalar(1 + Math.sin(t * 0.35) * 0.03);
+        });
+        const ringColor = useMemo(() => {
+            const c = new THREE.Color(palette.edge);
+            const h = new THREE.Color(palette.highlight);
+            return c.lerp(h, 0.35).getStyle();
+        }, [palette]);
+        return (
+            <mesh ref={ref} position={position} rotation={[Math.PI / 2, 0, 0]}>
+                <torusGeometry args={[42, 0.6, 16, 128]} />
                 <meshStandardMaterial
-                    vertexColors
-                    emissive="#0b0a08"
-                    emissiveIntensity={0.05}
-                    metalness={0.04}
-                    roughness={0.85}
-                    fog={false}
-                />
-            </mesh>
-            {/* Subtle haze */}
-            <mesh position={[0, 40, -1100]} geometry={cloudGeometry}>
-                <meshStandardMaterial
-                    color="#f3efe4"
+                    color={ringColor}
+                    emissive={palette.edge}
+                    emissiveIntensity={0.35}
+                    roughness={0.4}
+                    metalness={0.3}
                     transparent
-                    opacity={0.06}
-                    depthWrite={false}
-                    metalness={0}
-                    roughness={1}
-                    fog={false}
+                    opacity={0.6}
                 />
             </mesh>
-            {/* Thin atmosphere glow */}
-            <mesh position={[0, 40, -1100]} geometry={atmosphereGeometry}>
-                <meshBasicMaterial
-                    color="#e6d9b8"
-                    transparent
-                    opacity={0.05}
-                    depthWrite={false}
-                    fog={false}
-                />
-            </mesh>
-            {/* Planetary rings */}
-            <mesh position={[0, 40, -1100]} rotation={[Math.PI / 2.2, 0.3, 0]} geometry={ringGeometry}>
-                <meshStandardMaterial
-                    color="#d2c6ad"
-                    emissive="#a8997a"
-                    emissiveIntensity={0.15}
-                    metalness={0.15}
-                    roughness={0.6}
-                    transparent={false}
-                    side={THREE.DoubleSide}
-                    fog={false}
-                />
-            </mesh>
-        </group>
-    );
-});
+        );
+    };
 
 interface MirrorWorldProps {
     resetToken: number;
 }
 
 export const MirrorWorld: React.FC<MirrorWorldProps> = ({ resetToken }) => {
-    const [isPuzzleSolved, setIsPuzzleSolved] = useState(false);
-    const [nodeStates, setNodeStates] = useState([false, false, false]); // 3 Mirrors
-    const bridgeGroupRef = React.useRef<THREE.Group>(null);
+    const segments = useMemo(() => buildSegments(), []);
+    const [bandActive, setBandActive] = useState<boolean[]>([true, false, false, false]);
+    const [paletteIndex, setPaletteIndex] = useState(0);
+    const palette = useMemo(() => PALETTES[paletteIndex], [paletteIndex]);
 
-    // Reset puzzle on death/reset
+    const nodes: ControlNode[] = useMemo(() => ([
+        { id: 0, position: [-4, 1.2, -26], activatesBand: 1 },
+        { id: 1, position: [4, 1.2, -72], activatesBand: 2 },
+        { id: 2, position: [0, 1.2, -124], activatesBand: 3 },
+    ]), []);
+
+    const obstacles = useMemo(() => ([
+        { type: 'lift' as const, position: [0, 0.6, -38], size: [2, 0.6, 3], speed: 1.2, range: 1.6 },
+        { type: 'spinner' as const, position: [0, 1.0, -86], size: [7, 0.4, 0.6], speed: 1.4 },
+        { type: 'pusher' as const, position: [0, 1.0, -118], size: [2, 2, 2], speed: 1.6, range: 3.5 },
+        { type: 'lift' as const, position: [0, 0.6, -162], size: [2.2, 0.6, 3], speed: 1.0, range: 2.0 },
+    ]), []);
+
+    const gates: Gate[] = useMemo(() => ([
+        { band: 1, z: -42 },
+        { band: 2, z: -100 },
+        { band: 3, z: -158 },
+    ]), []);
+
     useEffect(() => {
-        setNodeStates([false, false, false]);
-        setIsPuzzleSolved(false);
-        if (bridgeGroupRef.current) {
-            bridgeGroupRef.current.position.y = -10;
-        }
+        setBandActive([true, false, false, false]);
+        setPaletteIndex(0);
     }, [resetToken]);
 
-    // Puzzle Configuration
-    const emitterPos = useMemo(() => new THREE.Vector3(0, 2, 0), []);
-    const node1Pos = useMemo(() => new THREE.Vector3(10, 2, 0), []);
-    const node2Pos = useMemo(() => new THREE.Vector3(10, 2, -20), []);
-    const node3Pos = useMemo(() => new THREE.Vector3(-10, 2, -20), []);
-    const receiverPos = useMemo(() => new THREE.Vector3(-10, 2, 0), []);
+    const activateBand = (band: number) => {
+        setBandActive(prev => {
+            if (prev[band]) return prev;
+            const next = [...prev];
+            next[band] = true;
+            return next;
+        });
+        setPaletteIndex(clampPaletteIndex(band));
+    };
 
-    // Calculate Laser Path based on active mirrors
-    const laserPoints = React.useMemo(() => {
-        const points = [emitterPos];
-
-        // Segment 1: Emitter -> Node 1
-        if (nodeStates[0]) {
-            points.push(node1Pos);
-
-            // Segment 2: Node 1 -> Node 2
-            if (nodeStates[1]) {
-                points.push(node2Pos);
-
-                // Segment 3: Node 2 -> Node 3
-                if (nodeStates[2]) {
-                    points.push(node3Pos);
-
-                    // Segment 4: Node 3 -> Receiver
-                    points.push(receiverPos);
-                } else {
-                    // Missed Node 3 (Shoot past it)
-                    points.push(new THREE.Vector3(-15, 2, -20));
-                }
-            } else {
-                // Missed Node 2 (Shoot past it)
-                points.push(new THREE.Vector3(10, 2, -25));
-            }
-        } else {
-            // Missed Node 1 (Shoot past it)
-            points.push(new THREE.Vector3(15, 2, 0));
+    const gridLines = useMemo(() => {
+        const points: THREE.Vector3[] = [];
+        const span = 12;
+        for (let i = -2; i <= 2; i += 1) {
+            points.push(new THREE.Vector3(i * 3, 0.02, 2));
+            points.push(new THREE.Vector3(i * 3, 0.02, -SEGMENT_LENGTH * (SEGMENT_COUNT - 1) - span));
         }
         return points;
-    }, [nodeStates, emitterPos, node1Pos, node2Pos, node3Pos, receiverPos]);
-
-    useEffect(() => {
-        // Check if path reached receiver
-        const solved = nodeStates[0] && nodeStates[1] && nodeStates[2];
-        setIsPuzzleSolved(solved);
-    }, [nodeStates]);
-
-    useFrame((state, delta) => {
-        if (bridgeGroupRef.current) {
-            const targetY = isPuzzleSolved ? 0 : -10;
-            bridgeGroupRef.current.position.y = THREE.MathUtils.lerp(bridgeGroupRef.current.position.y, targetY, delta * 2);
-        }
-    });
-
-    const handleNodeHit = React.useCallback((index: number, type: GunType) => {
-        if (type === GunType.MIRROR) {
-            setNodeStates(prev => {
-                const next = [...prev];
-                next[index] = true;
-                return next;
-            });
-        }
     }, []);
 
-    const onNode1Hit = React.useCallback((t: GunType) => handleNodeHit(0, t), [handleNodeHit]);
-    const onNode2Hit = React.useCallback((t: GunType) => handleNodeHit(1, t), [handleNodeHit]);
-    const onNode3Hit = React.useCallback((t: GunType) => handleNodeHit(2, t), [handleNodeHit]);
-
-    // --- Active Theme Logic ---
-    const activeCount = nodeStates.filter(Boolean).length;
-    // Theme Palette: Purple (Base) -> Blue (Active 1) -> Orange (Active 2) -> Green (Success)
-    // Actually user requested: Green=Reflective, Cyan=Walkable, Purple=Framework, Red=Key.
-    // We will use "Active Color" to drive the background reactivity, while keeping structural colors consistent.
-    // But for "feedback", let's make the 'ActiveColor' shift energy state.
-    const activeColor = useMemo(() => {
-        if (isPuzzleSolved) return "#00ff00"; // Pure Green
-        if (activeCount === 2) return "#ff9900"; // High Energy Orange
-        if (activeCount === 1) return "#00ffff"; // Active Cyan
-        return "#ff00ff"; // Base Magenta/Purple
-    }, [activeCount, isPuzzleSolved]);
-
-    const intensity = activeCount === 3 ? 2.0 : (activeCount * 0.5);
+    const guideBeams = useMemo(() => (
+        [
+            { x: 5, kind: 'edge' as const },
+            { x: -5, kind: 'edge' as const },
+            { x: 0, kind: 'gate' as const },
+        ]
+    ), []);
 
     return (
         <>
-            <color attach="background" args={['#050005']} />
-            <fog attach="fog" args={['#050005', 40, 120]} />
+            <color attach="background" args={[SKY_COLOR]} />
 
-            {/* Rich Cyber Atmosphere */}
-            <OpticalMatrixBackground intensity={intensity} activeColor={activeColor} />
+            {/* Cyber backdrop */}
+            <Stars radius={180} depth={60} count={3200} factor={3.5} saturation={0} fade speed={0.5} />
+            <Sparkles count={600} scale={[160, 90, 500]} size={3} speed={0.45} opacity={0.22} color={palette.edge} />
+            <Sparkles count={260} position={[0, 20, -240]} scale={80} size={2.2} speed={0.6} opacity={0.28} color={palette.highlight} />
 
-            <ambientLight intensity={0.4} color="#8800ff" /> {/* Purple Base Ambient */}
-            <directionalLight 
-                position={[10, 20, 10]} 
-                intensity={1.0 + intensity} 
-                color={activeColor} 
-                castShadow 
-                shadow-mapSize-width={2048} 
-                shadow-mapSize-height={2048} 
-            />
-            {/* Rim light for definition */}
-            <spotLight position={[-10, 10, -5]} angle={0.5} intensity={5} color="#00ffff" distance={60} />
-            
-            {/* Sonic Pulse Rings Effect - matching distinct colors */}
-            <PulseRings position={node1Pos} color="#00ffff" active={nodeStates[0]} />
-            <PulseRings position={node2Pos} color="#ff9900" active={nodeStates[1]} />
-            <PulseRings position={node3Pos} color="#00ff00" active={nodeStates[2]} />
+            {/* High-altitude ring to anchor the skyline */}
+            <SkyRing palette={palette} position={[0, 32, -160]} />
 
-            {/* Start Platform */}
-            <SimplePlatform position={[0, -2, 5]} size={[8, 1, 8]} safe interactive />
+            {/* Lighting: strong forward directionality */}
+            <ambientLight intensity={0.35} color={palette.ambient} />
+            <directionalLight position={[4, 10, 6]} intensity={1.4} color={palette.edge} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
+            <directionalLight position={[-6, 6, 2]} intensity={0.5} color={palette.dim} />
 
-            {/* Puzzle Platforms */}
-            <SimplePlatform position={[10, -2, 0]} size={[6, 1, 6]} safe interactive />
-            <SimplePlatform position={[10, -2, -20]} size={[6, 1, 6]} safe interactive />
-            <SimplePlatform position={[-10, -2, -20]} size={[6, 1, 6]} safe interactive />
-            <SimplePlatform position={[-10, -2, 0]} size={[6, 1, 6]} safe interactive />
-
-            {/* Laser System */}
-            <LaserPuzzle
-                points={laserPoints}
-                solved={isPuzzleSolved}
-            />
-
-            {/* Puzzle Nodes (Mirrors) */}
-            {/* Node 1 */}
-            <LabObject
-                position={[10, 2, 0]}
-                rotation={[0, Math.PI / 4, 0]}
-                size={[2, 2, 2]}
-                resetToken={resetToken}
-                stageId={2}
-                onTypeChange={onNode1Hit}
-            />
-            {/* Node 2 */}
-            <LabObject
-                position={[10, 2, -20]}
-                rotation={[0, Math.PI / 4, 0]}
-                size={[2, 2, 2]}
-                resetToken={resetToken}
-                stageId={2}
-                onTypeChange={onNode2Hit}
-            />
-            {/* Node 3 */}
-            <LabObject
-                position={[-10, 2, -20]}
-                rotation={[0, Math.PI / 4, 0]}
-                size={[2, 2, 2]}
-                resetToken={resetToken}
-                stageId={2}
-                onTypeChange={onNode3Hit}
-            />
-
-            {/* Receiver */}
-            <mesh position={[-10, 2, 0]}>
-                <sphereGeometry args={[1, 32, 32]} />
-                <meshStandardMaterial
-                    color={isPuzzleSolved ? "#00ff00" : "#333333"}
-                    emissive={isPuzzleSolved ? "#00ff00" : "#000000"}
-                    emissiveIntensity={2}
-                />
+            {/* Minimal horizon strip to imply motion */}
+            <mesh position={[0, -3.2, -200]} rotation={[-Math.PI / 2, 0, 0]}>
+                <planeGeometry args={[160, 800]} />
+                <meshStandardMaterial color={palette.dim} metalness={0.05} roughness={0.95} />
             </mesh>
 
-            {/* The Bridge - Now Interactive LabObject */}
-            <group ref={bridgeGroupRef} position={[-10, -10, -10]}>
-                <LabObject
-                    position={[0, 0, 0]}
-                    size={[4, 0.5, 15]}
-                    resetToken={resetToken}
-                    stageId={2}
-                    isSafeSurface
-                />
+            {/* Vertical guide beams to reinforce direction */}
+            {guideBeams.map((b, idx) => (
+                <mesh key={idx} position={[b.x, 6, -120]}>
+                    <cylinderGeometry args={[0.12, 0.12, 20, 12]} />
+                    <meshStandardMaterial color={b.kind === 'gate' ? palette.gate : palette.edge} emissive={b.kind === 'gate' ? palette.gate : palette.edge} emissiveIntensity={0.8} roughness={0.4} metalness={0.3} />
+                </mesh>
+            ))}
+
+            {/* Flying drakes across the skyline */}
+            <FlyingDrake offsetZ={-210} palette={palette} speed={0.34} height={9} sway={2.5} />
+            <FlyingDrake offsetZ={-260} palette={palette} speed={0.28} height={11} sway={3.5} />
+            <FlyingDrake offsetZ={-300} palette={palette} speed={0.38} height={10} sway={2.8} />
+
+            {/* Abstract light columns for spatial cadence */}
+            <LightColumns palette={palette} length={340} spacing={8} />
+
+            {/* Sparse particle ribbons flanking the track for motion depth */}
+            <SideParticleStream side="left" palette={palette} count={80} length={340} />
+            <SideParticleStream side="right" palette={palette} count={80} length={340} />
+
+            {/* Longitudinal guide lines */}
+            <group>
+                {gridLines.map((p, idx) => (
+                    idx % 2 === 0 ? (
+                        <line key={idx} position={[0, 0.01, 0]}>
+                            <bufferGeometry attach="geometry">
+                                <bufferAttribute attach="attributes-position" args={[new Float32Array([p.x, p.y, p.z, gridLines[idx + 1].x, gridLines[idx + 1].y, gridLines[idx + 1].z]), 3]} />
+                            </bufferGeometry>
+                            <lineBasicMaterial color={palette.edge} linewidth={2} transparent opacity={0.25} />
+                        </line>
+                    ) : null
+                ))}
             </group>
 
-            {/* Final Tower */}
-            <LabObject position={[-10, 5, -25]} size={[6, 0.5, 6]} resetToken={resetToken} stageId={2} isTargetSurface isSafeSurface />
-            <LabObject position={[-10, 10, -30]} size={[4, 0.5, 4]} resetToken={resetToken} stageId={2} isTargetSurface isSafeSurface />
-            <LabObject position={[-10, 15, -35]} size={[4, 0.5, 4]} resetToken={resetToken} stageId={2} isTargetSurface isSafeSurface />
+            {/* Segments */}
+            {segments.map(seg => (
+                <RunwaySegment key={seg.id} segment={seg} active={bandActive[bandIndexFor(seg.id)]} palette={palette} />
+            ))}
 
-            {/* Ghost Gate - Blocks the goal */}
-            {/* Player must shoot this with Ghost Gun to pass through */}
-            <LabObject
-                position={[-10, 17, -33]}
-                size={[4, 4, 0.5]}
-                resetToken={resetToken}
-                stageId={2}
-                initialType={null} // Solid initially
-            />
+            {/* Locked gates that drop when corresponding band is active */}
+            {gates.map(g => (
+                <BarrierGate key={g.z} gate={g} active={bandActive[g.band]} palette={palette} />
+            ))}
 
-            <GoalBeacon position={[-10, 17, -35]} />
+            {/* Obstacles */}
+            {obstacles.map((obs, idx) => (
+                <MovingObstacle key={idx} type={obs.type} position={obs.position} size={obs.size} speed={obs.speed} range={obs.range} palette={palette} />
+            ))}
+
+            {/* Control nodes that reveal further bands */}
+            {nodes.map(node => (
+                <ActivatorNode key={node.id} node={node} onHit={activateBand} resetToken={resetToken} palette={palette} />
+            ))}
+
+            {/* Goal */}
+            <GoalBeacon position={[0, 1.2, -245]} palette={palette} />
+
+            {/* Pulsing audio-like waves */}
+            <PulseWaves palette={palette} />
         </>
     );
 };
