@@ -98,6 +98,9 @@ export default function App() {
     }
     // Keep transitionInfo for possible future use (non-blocking)
     setTransitionInfo({ type: isFinal ? 'final' : 'stage', from, to });
+
+    // Clear transitionInfo after a short delay to unfreeze the player
+    setTimeout(() => setTransitionInfo(null), 500);
   };
 
   // Keyboard controls for weapon switching
