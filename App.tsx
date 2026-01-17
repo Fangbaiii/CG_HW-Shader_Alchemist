@@ -10,7 +10,7 @@ import { JellyBullet } from '@/components/entities/JellyBullet';
 import { GhostBullet } from '@/components/entities/GhostBullet';
 import { MirrorBullet } from '@/components/entities/MirrorBullet';
 import { MaterialAnimationProvider } from '@/components/materials';
-
+import { LevelCompleteScreen } from './components/ui/LevelCompleteScreen';
 const STAGES = [
   {
     code: '01',
@@ -31,7 +31,7 @@ const STAGES = [
     title: 'Mirror Spire',
     detail: 'Chrome the launch pads to harvest forward boosts and climb the prism tower.',
     spawn: new THREE.Vector3(0, 1.9, 4),
-    goalZ: -46,
+    goalZ: -35, // Match Mirror goal beacon depth so completion triggers
   },
 ] as const;
 
@@ -57,6 +57,7 @@ export default function App() {
   const [stageIndex, setStageIndex] = useState(0);
   const [transitionInfo, setTransitionInfo] = useState<StageTransition | null>(null);
   const [resetToken, setResetToken] = useState(0);
+  const [showFinalOverlay, setShowFinalOverlay] = useState(false);
 
   const currentStage = STAGES[stageIndex];
 
@@ -86,14 +87,17 @@ export default function App() {
     const from = stageIndex;
     const to = (stageIndex + 1) % STAGES.length;
     const isFinal = from === STAGES.length - 1;
-    setTransitionInfo({ type: isFinal ? 'final' : 'stage', from, to });
+    // Immediately advance stage and reset
+    setStageIndex(to);
     setResetToken(token => token + 1);
 
-    const duration = isFinal ? 2800 : 1600;
-    setTimeout(() => {
-      setTransitionInfo(null);
-      setStageIndex(to);
-    }, duration);
+    // Show overlay only for final completion
+    if (isFinal) {
+      setShowFinalOverlay(true);
+      setTimeout(() => setShowFinalOverlay(false), 10000);
+    }
+    // Keep transitionInfo for possible future use (non-blocking)
+    setTransitionInfo({ type: isFinal ? 'final' : 'stage', from, to });
   };
 
   // Keyboard controls for weapon switching
@@ -135,7 +139,7 @@ export default function App() {
                 stageId={stageIndex}
                 isFrozen={Boolean(transitionInfo)}
               />
-              {bullets.map(b => {
+              {bullets?.map(b => {
                 if (b.type === GunType.JELLY) {
                   return (
                     <JellyBullet
@@ -183,7 +187,7 @@ export default function App() {
 
       {/* Weapon Selector - Moved to Bottom Left & Scaled Down */}
       <div className="absolute bottom-8 left-8 flex flex-col gap-2 pointer-events-none origin-bottom-left scale-90">
-        {Object.values(GUN_CONFIGS).map((config, index) => {
+        {Object.values(GUN_CONFIGS ?? {}).map((config, index) => {
           const isActive = config.type === currentGun;
           return (
             <div
@@ -251,7 +255,7 @@ export default function App() {
         <div className="bg-black/55 backdrop-blur-sm border border-white/10 rounded-lg p-4">
           <div className="text-[11px] tracking-[0.3em] text-gray-400 font-mono mb-3">LEVEL BRIEFING</div>
           <div className="space-y-3">
-            {STAGES.map((stage, index) => (
+            {STAGES?.map((stage, index) => (
               <div
                 key={stage.code}
                 className={`border-l-2 pl-3 transition-colors ${index === stageIndex ? 'border-cyan-400' : 'border-white/15'}`}
@@ -288,37 +292,28 @@ export default function App() {
         </div>
       )}
 
-      {transitionInfo && (
+      {showFinalOverlay && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[100]">
           <div className="relative overflow-hidden bg-black/80 border-y-2 border-cyan-400/60 px-16 py-12 text-center font-mono text-white shadow-[0_0_50px_rgba(0,255,255,0.3)] backdrop-blur-md animate-in fade-in zoom-in duration-500">
-
-            {/* Background Glitch Effect */}
             <div className="absolute inset-0 opacity-10 bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,#00ffff_10px,#00ffff_11px)]"></div>
-
-            {/* Main Title */}
             <div className="relative z-10">
               <div className="text-cyan-300 tracking-[0.5em] text-sm mb-4 animate-pulse">
-                {transitionInfo.type === 'final' ? 'SYSTEM: SIMULATION_END' : 'SYSTEM: CHECKPOINT_REACHED'}
+                SYSTEM: SIMULATION_END
               </div>
 
               <div className="text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-200 via-white to-cyan-200 drop-shadow-[0_0_10px_rgba(0,255,255,0.8)]">
-                {transitionInfo.type === 'final' ? '试炼完成' : '关卡通过'}
+                试炼完成
               </div>
 
               <div className="w-full h-px bg-gradient-to-r from-transparent via-cyan-500 to-transparent my-4 opacity-50"></div>
 
               <div className="text-lg text-cyan-100 font-light tracking-widest">
-                {transitionInfo.type === 'final'
-                  ? '恭喜！你已掌握所有炼金术式。'
-                  : `正在建立神经链接... 目标：${STAGES[transitionInfo.to].code} 区`
-                }
+                恭喜！你已掌握所有炼金术式。
               </div>
 
-              {transitionInfo.type !== 'final' && (
-                <div className="mt-6 text-xs text-gray-400 animate-bounce">
-                  加载下一区域数据...
-                </div>
-              )}
+              <div className="mt-6 text-xs text-gray-400 animate-bounce">
+                正在保存成绩 / 重置模拟...
+              </div>
             </div>
           </div>
         </div>

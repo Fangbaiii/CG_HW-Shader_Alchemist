@@ -118,12 +118,13 @@ const FloatingRocksInstanced = () => {
 
   // Store initial Y positions for floating animation
   const initialYPositions = useMemo(() =>
-    FLOATING_ROCKS_DATA.map(rock => rock.position[1]),
+    FLOATING_ROCKS_DATA?.map(rock => rock.position[1]) ?? [],
     []);
 
   // Initialize instance matrices on mount
   useLayoutEffect(() => {
     if (!instancedMeshRef.current) return;
+    if (!FLOATING_ROCKS_DATA) return;
 
     FLOATING_ROCKS_DATA.forEach((rock, i) => {
       tempObject.position.set(rock.position[0], rock.position[1], rock.position[2]);
@@ -454,7 +455,7 @@ export const VolcanoWorld: React.FC<VolcanoWorldProps> = ({ resetToken }) => (
       ]}
     />
     <LavaPlane />
-    {JELLY_FLOATERS.map((data, index) => (
+    {JELLY_FLOATERS?.map((data, index) => (
       <LabObject
         key={`jelly-${index}`}
         position={data.position}
@@ -463,7 +464,7 @@ export const VolcanoWorld: React.FC<VolcanoWorldProps> = ({ resetToken }) => (
         isTargetSurface
       />
     ))}
-    {LAVA_COLUMNS.map((data, index) => (
+    {LAVA_COLUMNS?.map((data, index) => (
       <LabObject key={`column-${index}`} position={data.position} size={data.size} resetToken={resetToken} />
     ))}
     <GoalBeacon position={[0, 15, -68]} />
