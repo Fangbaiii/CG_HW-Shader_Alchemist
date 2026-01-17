@@ -24,7 +24,7 @@ const STAGES = [
     title: 'Phase Crucible',
     detail: 'Ghost the gate bricks to slip through sealed corridors and vertical shafts.',
     spawn: new THREE.Vector3(0, 1.8, 0),
-    goalZ: -44,
+    goalZ: -70,
   },
   {
     code: '03',

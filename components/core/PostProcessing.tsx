@@ -32,9 +32,9 @@ export const VolcanoPostProcessing: React.FC = () => {
 };
 
 /**
- * GhostPostProcessing - 幽灵关卡后处理效果
+ * CrystalPostProcessing - 水晶关卡后处理效果
  */
-export const GhostPostProcessing: React.FC = () => {
+export const CrystalPostProcessing: React.FC = () => {
     return (
         <EffectComposer multisampling={0} renderPriority={2}>
             <Bloom

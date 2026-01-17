@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { VolcanoWorld } from './VolcanoWorld';
-import { GhostWorld } from './GhostWorld';
+import { CrystalWorld } from './CrystalWorld';
 import { MirrorWorld } from '@/components/scenes/MirrorWorld';
-import { VolcanoPostProcessing, GhostPostProcessing, MirrorPostProcessing } from '@/components/core/PostProcessing';
+import { VolcanoPostProcessing, CrystalPostProcessing, MirrorPostProcessing } from '@/components/core/PostProcessing';
 
 interface WorldProps {
   resetToken: number;
@@ -21,8 +21,8 @@ export const World: React.FC<WorldProps> = ({ resetToken, stageIndex }) => {
   if (stageIndex === 1) {
     return (
       <>
-        <GhostWorld resetToken={resetToken} />
-        <GhostPostProcessing />
+        <CrystalWorld resetToken={resetToken} />
+        <CrystalPostProcessing />
       </>
     );
   }

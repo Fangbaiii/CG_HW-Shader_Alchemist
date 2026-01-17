@@ -9,3 +9,5 @@ export * from './ObsidianMaterial';
 export * from './PlanetBlockMaterial';
 export * from './CyberGridMaterial';
 export * from './LabMaterial';
+export * from './CrystalMaterial';
+
