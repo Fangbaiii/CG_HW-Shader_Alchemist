@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Stars, Sparkles } from '@react-three/drei';
 import * as THREE from 'three';
@@ -407,6 +407,267 @@ const SkyRing: React.FC<{ palette: typeof PALETTES[number]; position?: [number, 
         );
     };
 
+type BeamPuzzleConfig = {
+    id: number;
+    band: number;
+    emitter: [number, number, number];
+    emitterDir: [number, number, number];
+    mirror: { position: [number, number, number]; rotation?: [number, number, number]; size?: [number, number, number] };
+    receiver: { position: [number, number, number]; size?: [number, number, number] };
+};
+
+type GhostBarrierConfig = {
+    id: number;
+    position: [number, number, number];
+    size?: [number, number, number];
+    rotation?: [number, number, number];
+};
+
+const MirrorBeamPuzzle: React.FC<{ config: BeamPuzzleConfig; palette: typeof PALETTES[number]; resetToken: number; onSolved: () => void }>
+    = ({ config, palette, resetToken, onSolved }) => {
+        const lineRef = useRef<THREE.Line>(null);
+        const beamMeshRef = useRef<THREE.Mesh>(null);
+        const reflectedBeamRef = useRef<THREE.Mesh>(null);
+        const [mirrorType, setMirrorType] = useState<GunType | null>(null);
+        const [receiverHit, setReceiverHit] = useState(false);
+        const solvedRef = useRef(false);
+
+        const emitterPos = useMemo(() => new THREE.Vector3(...config.emitter), [config]);
+        const emitterDir = useMemo(() => new THREE.Vector3(...config.emitterDir).normalize(), [config]);
+        const mirrorPos = useMemo(() => new THREE.Vector3(...config.mirror.position), [config]);
+        const mirrorRotFromConfig = useMemo(() => config.mirror.rotation || [0, 0, 0], [config]);
+
+        // 接收器位置/体积先声明，供法线推导使用
+        const receiverPos = useMemo(() => new THREE.Vector3(...config.receiver.position), [config]);
+        const receiverHalf = useMemo(() => {
+            const sz = config.receiver.size ?? [1.4, 1.4, 1.4];
+            return new THREE.Vector3(sz[0] / 2, sz[1] / 2, sz[2] / 2);
+        }, [config]);
+
+        // 接收器固定朝向45度（与x轴成45度角）
+        const receiverYaw = useMemo(() => Math.PI / 4, []);
+
+        // 使用配置的镜子旋转角度计算法线（镜面朝向）
+        const mirrorNormal = useMemo(() => {
+            const n = new THREE.Vector3(0, 0, 1);
+            const euler = new THREE.Euler(...(mirrorRotFromConfig as [number, number, number]));
+            n.applyEuler(euler);
+            return n.normalize();
+        }, [mirrorRotFromConfig]);
+
+        // 让方块朝向与计算法线匹配，保证视觉上的镜面方向与反射一致
+        const mirrorVisualRotation = useMemo(() => {
+            const targetNormal = mirrorNormal.clone();
+            const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), targetNormal);
+            const e = new THREE.Euler().setFromQuaternion(quat);
+            return [e.x, e.y, e.z] as [number, number, number];
+        }, [mirrorNormal]);
+
+        const intersectRayAABB = useCallback((origin: THREE.Vector3, dir: THREE.Vector3, center: THREE.Vector3, half: THREE.Vector3) => {
+            let tmin = -Infinity;
+            let tmax = Infinity;
+            for (let i = 0; i < 3; i++) {
+                const o = origin.getComponent(i);
+                const d = dir.getComponent(i);
+                const c = center.getComponent(i);
+                const h = half.getComponent(i);
+                if (Math.abs(d) < 1e-6) {
+                    if (o < c - h || o > c + h) return null;
+                } else {
+                    const inv = 1 / d;
+                    const t1 = ((c - h) - o) * inv;
+                    const t2 = ((c + h) - o) * inv;
+                    const tNear = Math.min(t1, t2);
+                    const tFar = Math.max(t1, t2);
+                    tmin = Math.max(tmin, tNear);
+                    tmax = Math.min(tmax, tFar);
+                    if (tmin > tmax) return null;
+                }
+            }
+            if (tmax < 0) return null; // box is behind origin
+            const hitT = tmin >= 0 ? tmin : tmax;
+            return hitT >= 0 ? hitT : null;
+        }, []);
+
+        useEffect(() => {
+            solvedRef.current = false;
+            setMirrorType(null);
+            setReceiverHit(false);
+        }, [resetToken]);
+
+        useFrame(() => {
+            const hasMirror = mirrorType === GunType.MIRROR;
+            const toMirror = mirrorPos.clone().sub(emitterPos);
+            const distToMirror = toMirror.length();
+            const incidentDir = toMirror.clone().normalize(); // 动态以镜子为目标的入射方向
+            const facingNormal = incidentDir.dot(mirrorNormal) > 0 ? mirrorNormal.clone().negate() : mirrorNormal;
+
+            // 初始光束：发射器 → 镜子
+            if (beamMeshRef.current) {
+                beamMeshRef.current.position.copy(emitterPos);
+                beamMeshRef.current.lookAt(mirrorPos);
+                beamMeshRef.current.scale.set(0.08, 0.08, distToMirror);
+                beamMeshRef.current.visible = true;
+            }
+
+            if (hasMirror) {
+                // 计算真实反射角度：入射方向 -> 镜面法线 -> 反射方向
+                const reflectedDir = incidentDir.clone().reflect(facingNormal).normalize();
+
+                // 射线与接收器 AABB 求交，决定光束长度
+                const hitT = intersectRayAABB(mirrorPos, reflectedDir, receiverPos, receiverHalf);
+                const distToReceiver = receiverPos.clone().sub(mirrorPos).length();
+                
+                // 简化命中判定：只要AABB有交点就算命中
+                const isHit = hitT !== null;
+                
+                // 光束长度：如果命中则到交点，否则射向远方
+                const beamLen = isHit ? hitT : Math.min(distToReceiver * 1.2, 40);
+
+                if (reflectedBeamRef.current) {
+                    reflectedBeamRef.current.position.copy(mirrorPos);
+                    reflectedBeamRef.current.lookAt(mirrorPos.clone().add(reflectedDir.clone().multiplyScalar(beamLen)));
+                    reflectedBeamRef.current.scale.set(0.08, 0.08, beamLen);
+                    reflectedBeamRef.current.visible = true;
+                }
+
+                if (isHit) {
+                    setReceiverHit(true);
+                    if (!solvedRef.current) {
+                        solvedRef.current = true;
+                        onSolved();
+                    }
+                } else {
+                    setReceiverHit(false);
+                    solvedRef.current = false;
+                }
+            } else {
+                // 无镜子，反射光束隐藏
+                if (reflectedBeamRef.current) {
+                    reflectedBeamRef.current.visible = false;
+                }
+                setReceiverHit(false);
+                solvedRef.current = false;
+            }
+        });
+
+        return (
+            <group>
+                {/* 发射器 */}
+                <mesh position={config.emitter}>
+                    <sphereGeometry args={[0.6, 16, 16]} />
+                    <meshStandardMaterial 
+                        color={palette.edge} 
+                        emissive={palette.edge} 
+                        emissiveIntensity={0.8} 
+                        roughness={0.3} 
+                        metalness={0.4} 
+                    />
+                    <pointLight color={palette.edge} intensity={2.5} distance={8} />
+                </mesh>
+
+                {/* 初始光束 */}
+                <mesh ref={beamMeshRef}>
+                    <cylinderGeometry args={[1, 1, 1, 8]} />
+                    <meshBasicMaterial 
+                        color={palette.edge} 
+                        transparent 
+                        opacity={0.4} 
+                        depthWrite={false} 
+                    />
+                </mesh>
+
+                {/* 反射光束 */}
+                <mesh ref={reflectedBeamRef} visible={false}>
+                    <cylinderGeometry args={[1, 1, 1, 8]} />
+                    <meshBasicMaterial 
+                        color={palette.highlight} 
+                        transparent 
+                        opacity={0.5} 
+                        depthWrite={false} 
+                    />
+                </mesh>
+
+                {/* 镜子方块 */}
+                <group position={config.mirror.position}>
+                    <LabObject
+                        position={[0, 0, 0]}
+                        rotation={mirrorVisualRotation as any}
+                        size={config.mirror.size ?? [2, 2, 2]}
+                        stageId={2}
+                        resetToken={resetToken}
+                        isTargetSurface
+                        onTypeChange={(t) => setMirrorType(t)}
+                    />
+                </group>
+
+                {/* 接收器 */}
+                <group position={config.receiver.position} rotation={[0, receiverYaw, 0]}>
+                    <mesh>
+                        <boxGeometry args={[(config.receiver.size?.[0] ?? 1.8) + 0.3, (config.receiver.size?.[1] ?? 1.8) + 0.3, (config.receiver.size?.[2] ?? 1.8) + 0.3]} />
+                        <meshStandardMaterial 
+                            color={receiverHit ? palette.highlight : palette.dim} 
+                            emissive={receiverHit ? palette.edge : palette.dim} 
+                            emissiveIntensity={receiverHit ? 0.8 : 0.1} 
+                            roughness={0.4} 
+                            metalness={0.3} 
+                            transparent
+                            opacity={0.6}
+                        />
+                    </mesh>
+                    {receiverHit && <pointLight color={palette.edge} intensity={3} distance={12} />}
+                </group>
+            </group>
+        );
+    };
+
+const GhostBarrier: React.FC<{ config: GhostBarrierConfig; palette: typeof PALETTES[number]; resetToken: number }>
+    = ({ config, palette, resetToken }) => {
+        const [ghostified, setGhostified] = useState(false);
+
+        useEffect(() => {
+            setGhostified(false);
+        }, [resetToken]);
+
+        const handleHit = (t: GunType) => {
+            if (t === GunType.GHOST) {
+                setGhostified(true);
+            }
+        };
+
+        return (
+            <group position={config.position} rotation={config.rotation ? new THREE.Euler(...config.rotation) : undefined}>
+                <LabObject
+                    position={[0, 0, 0]}
+                    size={config.size ?? [2.5, 3, 1.5]}
+                    stageId={2}
+                    resetToken={resetToken}
+                    isTargetSurface
+                    onTypeChange={handleHit}
+                />
+                {/* 屏障边框指示 */}
+                {!ghostified && (
+                    <>
+                        <mesh position={[0, 0, 0]}>
+                            <boxGeometry args={[(config.size?.[0] ?? 2.5) + 0.15, (config.size?.[1] ?? 3) + 0.15, (config.size?.[2] ?? 1.5) + 0.15]} />
+                            <meshBasicMaterial color={palette.gate} wireframe transparent opacity={0.4} />
+                        </mesh>
+                        <mesh position={[0, 0, 0]}>
+                            <boxGeometry args={[config.size?.[0] ?? 2.5, config.size?.[1] ?? 3, config.size?.[2] ?? 1.5]} />
+                            <meshStandardMaterial 
+                                color={palette.gate} 
+                                transparent 
+                                opacity={0.15} 
+                                emissive={palette.gate} 
+                                emissiveIntensity={0.3}
+                            />
+                        </mesh>
+                    </>
+                )}
+            </group>
+        );
+    };
+
 interface MirrorWorldProps {
     resetToken: number;
 }
@@ -417,10 +678,42 @@ export const MirrorWorld: React.FC<MirrorWorldProps> = ({ resetToken }) => {
     const [paletteIndex, setPaletteIndex] = useState(0);
     const palette = useMemo(() => PALETTES[paletteIndex], [paletteIndex]);
 
-    const nodes: ControlNode[] = useMemo(() => ([
-        { id: 0, position: [-4, 1.2, -26], activatesBand: 1 },
-        { id: 1, position: [4, 1.2, -72], activatesBand: 2 },
-        { id: 2, position: [0, 1.2, -124], activatesBand: 3 },
+    const nodes: ControlNode[] = useMemo(() => ([]), []); // reflection puzzles handle progression
+
+    const beamPuzzles: BeamPuzzleConfig[] = useMemo(() => ([
+        {
+            id: 0,
+            band: 1,
+            emitter: [-6.5, 1.4, -20],
+            emitterDir: [0.1, -0.1, -1],
+            mirror: { position: [6.5, 1.4, -20], rotation: [0, Math.PI / 4, 0], size: [1.8, 1.8, 1.8] },
+            receiver: { position: [6.5, 1.4, -34], size: [1.4, 1.4, 1.4] },
+        },
+        {
+            id: 1,
+            band: 2,
+            emitter: [-6.5, 1.4, -80],
+            emitterDir: [-0.1, -0.1, -1],
+            mirror: { position: [6.5, 1.4, -80], rotation: [0, Math.PI / 4, 0], size: [1.8, 1.8, 1.8] },
+            receiver: { position: [6.5, 1.4, -94], size: [1.4, 1.4, 1.4] },
+        },
+        {
+            id: 2,
+            band: 3,
+            emitter: [-6.5, 1.4, -136],
+            emitterDir: [0.15, -0.1, -1],
+            mirror: { position: [6.5, 1.4, -136], rotation: [0, Math.PI / 4, 0], size: [1.8, 1.8, 1.8] },
+            receiver: { position: [6.5, 1.4, -150], size: [1.4, 1.4, 1.4] },
+        },
+    ]), []);
+
+    // 终点前唯一的幽灵屏障：必须用幽灵枪将其透明后通过
+    const ghostBarriers: GhostBarrierConfig[] = useMemo(() => ([
+        {
+            id: 0,
+            position: [0, 1.2, -188],
+            size: [9.5, 3.5, 2.6], // nearly full track width
+        },
     ]), []);
 
     const obstacles = useMemo(() => ([
@@ -505,6 +798,27 @@ export const MirrorWorld: React.FC<MirrorWorldProps> = ({ resetToken }) => {
             <FlyingDrake offsetZ={-260} palette={palette} speed={0.28} height={11} sway={3.5} />
             <FlyingDrake offsetZ={-300} palette={palette} speed={0.38} height={10} sway={2.8} />
 
+            {/* Mirror beam puzzles: turn blocks into mirrors to route light and drop gates */}
+            {beamPuzzles.map(p => (
+                <MirrorBeamPuzzle
+                    key={p.id}
+                    config={p}
+                    palette={palette}
+                    resetToken={resetToken}
+                    onSolved={() => activateBand(p.band)}
+                />
+            ))}
+
+            {/* Ghost barriers: phase shift them to pass through */}
+            {ghostBarriers.map(b => (
+                <GhostBarrier
+                    key={b.id}
+                    config={b}
+                    palette={palette}
+                    resetToken={resetToken}
+                />
+            ))}
+
             {/* Abstract light columns for spatial cadence */}
             <LightColumns palette={palette} length={340} spacing={8} />
 
@@ -514,16 +828,14 @@ export const MirrorWorld: React.FC<MirrorWorldProps> = ({ resetToken }) => {
 
             {/* Longitudinal guide lines */}
             <group>
-                {gridLines.map((p, idx) => (
-                    idx % 2 === 0 ? (
-                        <line key={idx} position={[0, 0.01, 0]}>
-                            <bufferGeometry attach="geometry">
-                                <bufferAttribute attach="attributes-position" args={[new Float32Array([p.x, p.y, p.z, gridLines[idx + 1].x, gridLines[idx + 1].y, gridLines[idx + 1].z]), 3]} />
-                            </bufferGeometry>
-                            <lineBasicMaterial color={palette.edge} linewidth={2} transparent opacity={0.25} />
-                        </line>
-                    ) : null
-                ))}
+                {gridLines.map((p, idx) => {
+                    if (idx % 2 === 1) return null;
+                    const points = [p, gridLines[idx + 1]];
+                    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                    return (
+                        <primitive key={idx} object={new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: palette.edge, transparent: true, opacity: 0.25 }))} position={[0, 0.01, 0]} />
+                    );
+                })}
             </group>
 
             {/* Segments */}
