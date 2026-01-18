@@ -18,6 +18,9 @@ type PlanetDefinition = {
 const SKY_PLANETS: PlanetDefinition[] = [
   { model: '/models/Planet1.glb', position: [-35, 40, -50], scale: 2, rotationSpeed: 0.1 },
   { model: '/models/Planet3.glb', position: [25, 55, -35], scale: 1.5, rotationSpeed: 0.12 },
+  { model: '/models/Planet1.glb', position: [-25, 40, -10], scale: 2, rotationSpeed: 0.7 },
+  { model: '/models/Planet3.glb', position: [25, 40, 10], scale: 4, rotationSpeed: 0.6 },
+  { model: '/models/Planet1.glb', position: [-25, 40, 35], scale: 3, rotationSpeed: 0.1 },
 
 
 ];
@@ -203,15 +206,20 @@ const GradientSky: React.FC = () => {
   );
 };
 
-// --- Low-Poly 地表 - 暖色调米灰风格 ---
+// --- Low-Poly 地表 - 高度着色系统 ---
 const CrystalPlanetSurface: React.FC = () => {
-  const { camera } = useThree();
   const meshRef = useRef<THREE.Mesh>(null);
 
-  // 创建并修改几何体 - 一次性生成 Low-Poly 地形
+  // 创建几何体 - 带高度顶点颜色
   const geometry = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(200, 200, 32, 32);
+    const geo = new THREE.PlaneGeometry(200, 200, 48, 48);  // 增加细分
     const pos = geo.getAttribute('position');
+
+    // 颜色定义
+    const lowColor = new THREE.Color('#605548');   // 凹陷处深棕色
+    const midColor = new THREE.Color('#8a8070');   // 中间暖灰色
+    const highColor = new THREE.Color('#c8c0a8');  // 凸起处浅米色
+    const colors = new Float32Array(pos.count * 3);
 
     // 简单的确定性噪声函数
     const noise = (x: number, z: number, scale: number) => {
@@ -219,29 +227,54 @@ const CrystalPlanetSurface: React.FC = () => {
         Math.sin(x * scale * 1.3 + 1.0) * Math.cos(z * scale * 1.1) * 0.3;
     };
 
+    let minHeight = Infinity, maxHeight = -Infinity;
+    const heights: number[] = [];
+
+    // 第一遍：计算高度
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
-      const y = pos.getY(i);  // 平面几何体的 Y 实际是 XZ 平面的 Z
+      const y = pos.getY(i);
 
-      // 多层噪声叠加形成地形
-      let height = noise(x, y, 0.03) * 5.0;    // 大尺度丘陵
-      height += noise(x, y, 0.08) * 2.5;       // 中等起伏
-      height += noise(x, y, 0.2) * 1.0;        // 小细节
+      let height = noise(x, y, 0.03) * 5.0;
+      height += noise(x, y, 0.08) * 2.5;
+      height += noise(x, y, 0.2) * 1.0;
 
-      pos.setZ(i, height);  // 平面旋转后 Z 变成 Y
+      heights[i] = height;
+      minHeight = Math.min(minHeight, height);
+      maxHeight = Math.max(maxHeight, height);
+      pos.setZ(i, height);
     }
 
+    // 第二遍：根据高度设置颜色
+    const heightRange = maxHeight - minHeight;
+    for (let i = 0; i < pos.count; i++) {
+      const t = (heights[i] - minHeight) / heightRange;  // 归一化 0-1
+
+      // 使用两段混合：低->中->高
+      let color: THREE.Color;
+      if (t < 0.5) {
+        color = lowColor.clone().lerp(midColor, t * 2);
+      } else {
+        color = midColor.clone().lerp(highColor, (t - 0.5) * 2);
+      }
+
+      colors[i * 3] = color.r;
+      colors[i * 3 + 1] = color.g;
+      colors[i * 3 + 2] = color.b;
+    }
+
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     pos.needsUpdate = true;
     geo.computeVertexNormals();
     return geo;
   }, []);
 
-  // 基于高度的颜色计算
+  // 使用顶点颜色的材质
   const material = useMemo(() => new THREE.MeshStandardMaterial({
-    color: '#8a8070',      // 暖灰基色
+    vertexColors: true,     // 启用顶点颜色
     roughness: 0.95,
     metalness: 0.05,
-    flatShading: true,     // Low-Poly 关键！
+    flatShading: true,      // Low-Poly 关键
   }), []);
 
   return (
@@ -253,6 +286,135 @@ const CrystalPlanetSurface: React.FC = () => {
       position={[0, -2, -25]}
       receiveShadow
     />
+  );
+};
+
+// --- 地形高度采样函数（共享给石块系统使用）---
+const getTerrainHeight = (x: number, z: number): number => {
+  const noise = (px: number, pz: number, scale: number) => {
+    return Math.sin(px * scale) * Math.cos(pz * scale * 0.7) * 0.5 +
+      Math.sin(px * scale * 1.3 + 1.0) * Math.cos(pz * scale * 1.1) * 0.3;
+  };
+  // 地形偏移：position={[0, -2, -25]}
+  const localX = x;
+  const localZ = z + 25;
+  let height = noise(localX, localZ, 0.03) * 5.0;
+  height += noise(localX, localZ, 0.08) * 2.5;
+  height += noise(localX, localZ, 0.2) * 1.0;
+  return height - 2;  // 加上地形 Y 偏移
+};
+
+// --- 石块散布系统 - 性能优化版 ---
+const ScatteredRocks: React.FC = () => {
+  const rockCount = 120;  // 适中的数量保证性能
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+
+  useEffect(() => {
+    if (!meshRef.current) return;
+
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+    const rockColors = ['#706050', '#807060', '#605545', '#8a7a6a'];
+
+    for (let i = 0; i < rockCount; i++) {
+      // 随机位置（避开起点和终点区域）
+      const x = (Math.random() - 0.5) * 140;
+      const z = (Math.random() - 0.5) * 140 - 25;
+
+      // 避开起点平台区域
+      if (Math.abs(x) < 6 && z > -8 && z < 5) continue;
+
+      // 采样地形高度，让石块贴合地表
+      const terrainY = getTerrainHeight(x, z);
+      const scale = 0.15 + Math.random() * 0.45;  // 0.15~0.6
+
+      dummy.position.set(x, terrainY + scale * 0.3, z);  // 稍微嵌入地面
+      dummy.scale.setScalar(scale);
+      dummy.rotation.set(
+        Math.random() * Math.PI * 0.3,
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 0.3
+      );
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
+
+      // 随机颜色
+      color.set(rockColors[Math.floor(Math.random() * rockColors.length)]);
+      meshRef.current.setColorAt(i, color);
+    }
+
+    meshRef.current.instanceMatrix.needsUpdate = true;
+    if (meshRef.current.instanceColor) {
+      meshRef.current.instanceColor.needsUpdate = true;
+    }
+
+    // 修复视锥剔除 bug：手动设置足够大的包围球
+    meshRef.current.geometry.computeBoundingSphere();
+    meshRef.current.geometry.boundingSphere!.radius = 200;  // 覆盖整个散布区域
+  }, []);
+
+  return (
+    <instancedMesh ref={meshRef} args={[undefined, undefined, rockCount]} castShadow receiveShadow>
+      <dodecahedronGeometry args={[1, 0]} />
+      <meshStandardMaterial vertexColors roughness={0.9} flatShading />
+    </instancedMesh>
+  );
+};
+
+// --- 小水晶碎片散布 ---
+const ScatteredCrystalShards: React.FC = () => {
+  const shardCount = 60;
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+
+  useEffect(() => {
+    if (!meshRef.current) return;
+
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+    const shardColors = ['#88ccff', '#cc88ff', '#88ffcc', '#ffffff'];
+
+    for (let i = 0; i < shardCount; i++) {
+      const x = (Math.random() - 0.5) * 120;
+      const z = (Math.random() - 0.5) * 120 - 25;
+
+      const terrainY = getTerrainHeight(x, z);
+      const scale = 0.08 + Math.random() * 0.2;
+
+      dummy.position.set(x, terrainY + scale * 0.5, z);
+      dummy.scale.set(scale, scale * (1.5 + Math.random()), scale);
+      dummy.rotation.set(
+        Math.random() * 0.3 - 0.15,
+        Math.random() * Math.PI * 2,
+        Math.random() * 0.3 - 0.15
+      );
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
+
+      color.set(shardColors[Math.floor(Math.random() * shardColors.length)]);
+      meshRef.current.setColorAt(i, color);
+    }
+
+    meshRef.current.instanceMatrix.needsUpdate = true;
+    if (meshRef.current.instanceColor) {
+      meshRef.current.instanceColor.needsUpdate = true;
+    }
+
+    // 修复视锥剔除 bug
+    meshRef.current.geometry.computeBoundingSphere();
+    meshRef.current.geometry.boundingSphere!.radius = 200;
+  }, []);
+
+  return (
+    <instancedMesh ref={meshRef} args={[undefined, undefined, shardCount]}>
+      <octahedronGeometry args={[1, 0]} />
+      <meshStandardMaterial
+        vertexColors
+        roughness={0.2}
+        metalness={0.8}
+        emissive="#4488aa"
+        emissiveIntensity={0.15}
+      />
+    </instancedMesh>
   );
 };
 
@@ -392,20 +554,29 @@ export const CrystalWorld: React.FC<CrystalWorldProps> = ({ resetToken }) => (
       />
     ))}
 
-    {/* 禁用默认背景色和雾效 - 天空球已包含 */}
-    <fog attach="fog" args={['#c0b090', 60, 180]} />
+    {/* 指数雾效 - 增加深度感和神秘感 */}
+    <fogExp2 attach="fog" args={['#a8b8c8', 0.012]} />
 
     {/* Low-Poly 地表 */}
     <CrystalPlanetSurface />
 
+    {/* 石块和水晶碎片散布 */}
+    <ScatteredRocks />
+    <ScatteredCrystalShards />
+
     {/* 光照 - 增强对比度突出 Low-Poly 棱角 */}
-    <ambientLight intensity={0.2} color="#d0c8b0" />
+    <ambientLight intensity={0.25} color="#d0c8b0" />
     <directionalLight
-      position={[20, 40, 15]}
-      intensity={2.0}
+      position={[25, 50, 20]}
+      intensity={2.5}
       castShadow
-      shadow-mapSize-width={2048}
-      shadow-mapSize-height={2048}
+      shadow-mapSize-width={4096}
+      shadow-mapSize-height={4096}
+      shadow-bias={-0.0001}
+      shadow-camera-left={-80}
+      shadow-camera-right={80}
+      shadow-camera-top={80}
+      shadow-camera-bottom={-80}
       color="#fff8e0"
     />
     <hemisphereLight args={['#87ceeb', '#5a5550', 0.3]} />
